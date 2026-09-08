@@ -4,63 +4,50 @@ from crewai import Agent, Crew, Process, Task
 
 app = Flask(__name__)
 
-# ---------------------------------------------------------
-# AJANLARIN TANIMLANMASI (Mistik Ajan Holding Kadrosu)
-# ---------------------------------------------------------
-
-# 1. Stratejik Analist
 analyst = Agent(
     role="Stratejik Analist",
-    goal="Kullanıcının durumunu bütünsel olarak incelemek, fırsatları ve ana dinamikleri belirlemek.",
-    backstory="Sen Mistik Ajan Holding'in baş analistisin. Gelen her durumu yüzeysel değil, derinlemesine ve arketipler üzerinden analiz edersin.",
+    goal="Kullanıcının durumunu hızlıca ve öz bir şekilde incelemek.",
+    backstory="Sen Mistik Ajan Holding'in baş analistisin. Özet ve net analizler yaparsın.",
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
 )
 
-# 2. Risk ve Kriz Danışmanı
 risk_consultant = Agent(
     role="Risk ve Kriz Danışmanı",
-    goal="Olası engelleri, kayıpları, duygusal/finansal tuzakları ve kriz senaryolarını önceden tespit etmek.",
-    backstory="Sen koruyucu bir muhafızsın. Yanlış kararların getireceği maliyetleri hesaplar ve kullanıcıyı olası tuzaklara karşı uyarır, korursun.",
+    goal="Ana riskleri maddeler halinde tespit etmek.",
+    backstory="Sen koruyucu bir muhafızsın. En kritik 3 riski uyarır, geçersin.",
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
 )
 
-# 3. Kaynak ve Bütçe Stratejisti
 finance_strategist = Agent(
     role="Kaynak ve Bütçe Stratejisti",
-    goal="Zaman, maliyet, bütçe ve enerji verimliliğini optimum seviyeye getirecek planlama yapmak.",
-    backstory="Sen mali ve kaynak yönetim uzmanısın. Her adımın enerji ve bütçe karşılığını hesaplar, maksimum verimlilik sağlarsın.",
+    goal="Zaman ve bütçe verimliliği planlamak.",
+    backstory="Mali uzmansın. Bütçe ve kaynak önerisini kısa tutarsın.",
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
 )
 
-# 4. Saha ve İcra Direktörü
 operations_director = Agent(
     role="Saha ve İcra Direktörü",
-    goal="Analiz ve risk değerlendirmelerini net, adımları belli ve doğrudan uygulanabilir eylem planına çevirmek.",
-    backstory="Sen pragmatik bir uygulayıcısın. Teorik bilgiyi gün gün, adım adım somut aksiyon maddelerine dönüştürürsün.",
+    goal="Uygulanabilir 3 adımlık eylem planı sunmak.",
+    backstory="Pragmatik uygulayıcısın. Adımları net ve kısa yazarsın.",
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
 )
 
-# 5. Holding Genel Koordinatörü
 coordinator = Agent(
     role="Holding Genel Koordinatörü",
-    goal="Tüm birimlerden gelen verileri sentezleyip koruyucu, net, empatik ve profesyonel bir dille son raporu sunmak.",
-    backstory="Sen Mistik Ajan Holding'in Orkestra Şefisin. Kurumsal jargona veya mistik klişelere kaçmadan, doğrudan ve güçlendirici bir üslupla nihai kararı iletirsin.",
+    goal="Sentezleyip nihai kararı 2 paragrafta sunmak.",
+    backstory="Holding Orkestra Şefisin. Öz, güçlendirici ve net bir rapor sunarsın.",
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
 )
-
-# ---------------------------------------------------------
-# FLASK ENDPOINT
-# ---------------------------------------------------------
 
 @app.route("/", methods=["GET"])
 def home():
@@ -72,32 +59,32 @@ def analyze():
     user_query = data.get("query", "Hayatımdaki mevcut durumu değerlendirip bana yol haritası sun.")
 
     task1 = Task(
-        description=f"Şu konuyu derinlemesine incele ve ana dinamikleri çıkar: {user_query}",
-        expected_output="Stratejik durum analizi ve temel fırsatlar.",
+        description=f"Konuyu en fazla 2-3 cümleyle analiz et: {user_query}",
+        expected_output="Kısa durum analizi.",
         agent=analyst
     )
 
     task2 = Task(
-        description="Analiz edilen durumdaki riskleri, tuzakları ve dikkat edilmesi gereken noktaları belirle.",
-        expected_output="Risk değerlendirmesi ve koruyucu uyarılar.",
+        description="En kritik 3 riski maddeler halinde yaz.",
+        expected_output="Kısa risk maddeleri.",
         agent=risk_consultant
     )
 
     task3 = Task(
-        description="Bu sürecin zaman, maliyet ve enerji verimliliği planını yap.",
-        expected_output="Bütçe ve kaynak optimize önerileri.",
+        description="Bütçe ve kaynak verimliliği için 2 somut tavsiye ver.",
+        expected_output="Kısa bütçe tavsiyeleri.",
         agent=finance_strategist
     )
 
     task4 = Task(
-        description="Analiz ve risk girdilerine göre somut, uygulanabilir adım adım aksiyon planı hazırla.",
-        expected_output="Gün gün / adım adım icra planı.",
+        description="Uygulanabilir 3 eylem adımı belirt.",
+        expected_output="3 eylem adımı.",
         agent=operations_director
     )
 
     task5 = Task(
-        description="Tüm birimlerin çıktılarını birleştir. Mistik Ajan Holding adına kullanıcıya doğrudan, koruyucu ve net nihai kararı sun.",
-        expected_output="Nihai Holding Danışmanlık Raporu.",
+        description="Tüm çıktıları birleştirip kullanıcıya öz ve net bir nihai Holding raporu sun.",
+        expected_output="Kısa Holding Danışmanlık Raporu.",
         agent=coordinator
     )
 
