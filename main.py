@@ -4,6 +4,7 @@ import urllib.parse
 from functools import wraps
 from flask import Flask, Response, request, jsonify
 from crewai import Agent, Crew, Process, Task
+from crewai.tools import tool
 from langchain_community.tools import DuckDuckGoSearchRun
 from openai import OpenAI
 
@@ -15,12 +16,18 @@ app = Flask(__name__)
 API_KEY = os.environ.get("HOLDING_API_KEY", "mistik-secret-key-2026")
 OPENAI_CLIENT = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Canlı Web Arama Aracı Güvenli Yükleme
-try:
-    web_search_tool = DuckDuckGoSearchRun()
-    search_tools = [web_search_tool]
-except Exception:
-    search_tools = []
+# DuckDuckGo Arama Aracı (CrewAI Uyumlu Sarıcı)
+_ddg_search = DuckDuckGoSearchRun()
+
+@tool("Web Search Tool")
+def execute_web_search(query: str) -> str:
+    """İnternette güncel bilgi, trend veya veri araması yapar."""
+    try:
+        return _ddg_search.run(query)
+    except Exception as e:
+        return f"Arama esnasında hata oluştu: {str(e)}"
+
+search_tools = [execute_web_search]
 
 def require_api_key(f):
     @wraps(f)
@@ -147,7 +154,7 @@ coordinator = Agent(
 def home():
     return jsonify({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "14.0-ProductionStable",
+        "version": "15.0-ProductionStable",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     })
 
