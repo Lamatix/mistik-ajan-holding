@@ -1,10 +1,9 @@
+import json
 import os
-from flask import Flask, jsonify, request
+from flask import Flask, Response, request
 from crewai import Agent, Crew, Process, Task
 
 app = Flask(__name__)
-# Türkçe karakterlerin JSON çıktısında düzgün görünmesini sağlar
-app.config['JSON_AS_ASCII'] = False
 
 # ---------------------------------------------------------
 # AJANLARIN TANIMLANMASI (5 Çekirdek Ajan)
@@ -61,10 +60,8 @@ coordinator = Agent(
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({
-        "status": "Mistik Ajan Holding Canlıda!",
-        "version": "2.0-5Agents"
-    })
+    response_data = json.dumps({"status": "Mistik Ajan Holding Canlıda!", "version": "2.0-5Agents"}, ensure_ascii=False)
+    return Response(response_data, content_type="application/json; charset=utf-8")
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
@@ -110,10 +107,18 @@ def analyze():
 
     result = holding_crew.kickoff()
 
-    return jsonify({
+    response_payload = {
         "status": "success",
         "holding_report": str(result)
-    })
+    }
+
+    # UTF-8 zorlaması ile Türkçe karakterleri kaçış dizisiz doğrudan basar
+    return Response(
+        json.dumps(response_payload, ensure_ascii=False),
+        status=200,
+        mimetype="application/json",
+        headers={"Content-Type": "application/json; charset=utf-8"}
+    )
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
