@@ -10,7 +10,8 @@ app = Flask(__name__)
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 def create_dalle_image(prompt_text):
-    """Doğrudan OpenAI API'si ile DALL-E 3 Görseli Üretir."""
+    """Önce DALL-E 3'ü dener, yetki/model hatası alırsa otomatik DALL-E 2'ye geçer."""
+    # DALL-E 3 Denemesi
     try:
         response = client.images.generate(
             model="dall-e-3",
@@ -20,8 +21,18 @@ def create_dalle_image(prompt_text):
             n=1,
         )
         return response.data[0].url
-    except Exception as e:
-        return f"Görsel oluşturulamadı (Hata: {str(e)})"
+    except Exception as e1:
+        # DALL-E 3 Başarısız olursa DALL-E 2 Fallback Denemesi
+        try:
+            response = client.images.generate(
+                model="dall-e-2",
+                prompt=f"Esoteric aesthetic artwork: {prompt_text[:90]}", # DALL-E 2 kısa prompt ister
+                size="1024x1024",
+                n=1,
+            )
+            return response.data[0].url
+        except Exception as e2:
+            return f"Görsel üretimi başarısız. OpenAI API Yetki/Bakiye hatası: {str(e1)}"
 
 # ---------------------------------------------------------
 # AJANLARIN TANIMLANMASI (9 Ajanlı Holding Kadrosu)
@@ -83,8 +94,8 @@ creative_director = Agent(
 
 visual_designer = Agent(
     role="Görsel Tasarım Direktörü",
-    goal="İçerik konseptine uygun DALL-E 3 için mükemmel bir İngilizce görsel istemi (prompt) yazmak.",
-    backstory="Astroloji ve tarot sembolizmini üst düzey görsel estetikle birleştirip DALL-E 3 istemi hazırlarsın.",
+    goal="İçerik konseptine uygun görsel için mükemmel bir İngilizce istem (prompt) yazmak.",
+    backstory="Astroloji ve tarot sembolizmini üst düzey görsel estetikle birleştirip görsel istemi hazırlarsın.",
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
@@ -116,7 +127,7 @@ coordinator = Agent(
 def home():
     response_data = json.dumps({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "6.0-GuaranteedDalleNative",
+        "version": "7.0-DalleFallbackFix",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     }, ensure_ascii=False)
     return Response(response_data, content_type="application/json; charset=utf-8")
@@ -126,7 +137,6 @@ def analyze():
     data = request.get_json() or {}
     user_query = data.get("query", "Hayatımdaki mevcut durumu değerlendirip bana yol haritası ve sosyal medya görseli sun.")
 
-    # 1. Aşama: Analiz ve DALL-E Prompt Üretimi
     task1 = Task(description=f"Durumu 2 cümleyle analiz et: {user_query}", expected_output="Kısa durum analizi.", agent=analyst)
     task2 = Task(description="En kritik 2 riski maddeler halinde yaz.", expected_output="Kısa risk maddeleri.", agent=risk_consultant)
     task3 = Task(description="Bütçe ve zaman verimliliği için 2 somut tavsiye ver.", expected_output="Kısa bütçe tavsiyeleri.", agent=finance_strategist)
@@ -135,8 +145,8 @@ def analyze():
     task6 = Task(description="Bu durum için 1 adet kanca (hook) odaklı sosyal medya Reels/Shorts senaryo fikri yaz.", expected_output="Kreatif içerik senaryosu.", agent=creative_director)
     
     task7 = Task(
-        description="Bu konsept için DALL-E 3'e verilecek lüks, ezoterik, altın vurgulu, detaylı 1 cümlelik İNGİLİZCE görsel prompt'u yaz. Sadece prompt metnini ver.",
-        expected_output="DALL-E 3 için İngilizce prompt.",
+        description="Bu konsept için lüks, ezoterik, altın vurgulu, detaylı 1 cümlelik İNGİLİZCE görsel prompt'u yaz. Sadece prompt metnini ver.",
+        expected_output="İngilizce görsel prompt.",
         agent=visual_designer
     )
 
@@ -151,11 +161,9 @@ def analyze():
 
     result = holding_crew.kickoff()
 
-    # 2. Aşama: Doğrudan Garanti DALL-E 3 Görseli Üretimi
     image_prompt = str(task7.output) if hasattr(task7, 'output') and task7.output else user_query
     generated_image_url = create_dalle_image(image_prompt)
 
-    # 3. Aşama: Koordinatör Ajan Raporu ve Görsel URL Birleştirme
     task9 = Task(
         description=(
             f"Tüm analiz sonuçlarını ve sosyal medya paketini birleştir. "
