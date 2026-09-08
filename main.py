@@ -3,6 +3,7 @@ import os
 import urllib.parse
 from flask import Flask, Response, request
 from crewai import Agent, Crew, Process, Task
+from langchain_community.tools import DuckDuckGoSearchRun
 from openai import OpenAI
 
 app = Flask(__name__)
@@ -10,12 +11,14 @@ app = Flask(__name__)
 # OpenAI Resmi İstemcisi
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+# Canlı Web Arama Aracı
+web_search_tool = DuckDuckGoSearchRun()
+
 def create_dalle_image(prompt_text):
     """
     OpenAI'ın yeni görsel modeli 'gpt-image-2'yi dener.
     Yetki/Model hatası alınırsa kesintisiz yedek görsel motoruna (Pollinations AI) geçer.
     """
-    # 1. OpenAI Yeni Görsel Modeli (gpt-image-2)
     try:
         response = client.images.generate(
             model="gpt-image-2",
@@ -26,19 +29,19 @@ def create_dalle_image(prompt_text):
         )
         return response.data[0].url
     except Exception as e1:
-        # 2. YEDEK MOTOR (Kesintisiz Görsel Üretim Garantisi)
         clean_prompt = urllib.parse.quote(f"Luxury esoteric mystic artwork, {prompt_text}")
         fallback_url = f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&nologo=true"
         return fallback_url
 
 # ---------------------------------------------------------
-# AJANLARIN TANIMLANMASI (9 Ajanlı Holding Kadrosu)
+# AJANLARIN TANIMLANMASI (Canlı Arama Yetenekli Holding Kadrosu)
 # ---------------------------------------------------------
 
 analyst = Agent(
-    role="Stratejik Analist",
-    goal="Kullanıcının durumunu ve talebini hızlıca analiz etmek.",
-    backstory="Mistik Ajan Holding'in baş analistisin. Verileri özet bir şekilde analiz edersin.",
+    role="Stratejik Analist ve Piyasa Araştırmacısı",
+    goal="Canlı web taraması yaparak en güncel trendleri, piyasa verilerini ve durumları analiz etmek.",
+    backstory="Mistik Ajan Holding'in dijital istihbarat liderisin. İnterneti ve tüm açık kaynak sistemleri anlık tarayarak güncel verileri toplarsın.",
+    tools=[web_search_tool],
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
@@ -46,8 +49,9 @@ analyst = Agent(
 
 risk_consultant = Agent(
     role="Risk ve Kriz Danışmanı",
-    goal="Ana riskleri ve içerik/platform kısıtlamalarını tespit etmek.",
-    backstory="Holding'in koruyucu muhafızısın. Kritik riskleri doğrudan uyarırsın.",
+    goal="Ana riskleri, platform kısıtlamalarını ve güncel güvenlik açıklarını tespit etmek.",
+    backstory="Holding'in koruyucu muhafızısın. Güncel kriz ve risk durumlarını web üzerinden tarayarak uyarılarda bulunursun.",
+    tools=[web_search_tool],
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
@@ -124,8 +128,8 @@ coordinator = Agent(
 def home():
     response_data = json.dumps({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "9.0-GPTImage2Upgrade",
-        "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
+        "version": "10.0-LiveWebIntelligence",
+        "system": "Canlı İnternet Arama Destekli Otonom Üretim Motoru"
     }, ensure_ascii=False)
     return Response(response_data, content_type="application/json; charset=utf-8")
 
@@ -134,8 +138,8 @@ def analyze():
     data = request.get_json() or {}
     user_query = data.get("query", "Hayatımdaki mevcut durumu değerlendirip bana yol haritası ve sosyal medya görseli sun.")
 
-    task1 = Task(description=f"Durumu 2 cümleyle analiz et: {user_query}", expected_output="Kısa durum analizi.", agent=analyst)
-    task2 = Task(description="En kritik 2 riski maddeler halinde yaz.", expected_output="Kısa risk maddeleri.", agent=risk_consultant)
+    task1 = Task(description=f"Konuyla ilgili gerekiyorsa canlı web taraması yap ve durumu 2 cümleyle analiz et: {user_query}", expected_output="Canlı veri destekli durum analizi.", agent=analyst)
+    task2 = Task(description="Gerekirse web taraması yaparak en kritik 2 riski maddeler halinde yaz.", expected_output="Kısa risk maddeleri.", agent=risk_consultant)
     task3 = Task(description="Bütçe ve zaman verimliliği için 2 somut tavsiye ver.", expected_output="Kısa bütçe tavsiyeleri.", agent=finance_strategist)
     task4 = Task(description="Uygulanabilir 3 eylem adımı belirt.", expected_output="3 eylem adımı.", agent=operations_director)
     task5 = Task(description="Konuya dair 1 cümlelik mistik/sezgisel ve zamanlama tavsiyesi ver.", expected_output="Mistik/sezgisel analiz.", agent=mystic_analyst)
