@@ -2,18 +2,31 @@ import json
 import os
 from flask import Flask, Response, request
 from crewai import Agent, Crew, Process, Task
-from langchain_community.tools.dalle_image_generator import DallEImageGeneratorTool
+from crewai.tools import tool
+from openai import OpenAI
 
 app = Flask(__name__)
 
-# OpenAI ve DALL-E 3 Kurulumu
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+# OpenAI Resmi İstemcisi
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-dalle_tool = DallEImageGeneratorTool(
-    model="dall-e-3",
-    size="1024x1024",
-    quality="hd"
-)
+# ---------------------------------------------------------
+# DALL-E 3 ÖZEL TOOL TANIMI (Doğrudan OpenAI API ile)
+# ---------------------------------------------------------
+@tool("DALL-E 3 Görsel Üretim Aracı")
+def generate_dalle_image(prompt: str) -> str:
+    """Istenen konsept ve isteme (prompt) gore DALL-E 3 kullanarak yuksek kaliteli bir gorsel uretir ve gorsel URL adresini dondurur."""
+    try:
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1024",
+            quality="hd",
+            n=1,
+        )
+        return f"Uretilen Gorsel URL: {response.data[0].url}"
+    except Exception as e:
+        return f"Gorsel uretim hatasi: {str(e)}"
 
 # ---------------------------------------------------------
 # AJANLARIN TANIMLANMASI (Görsel ve Sosyal Medya Odaklı)
@@ -84,7 +97,7 @@ visual_designer = Agent(
     role="Görsel Tasarım Direktörü",
     goal="İçerik konseptine uygun lüks, altın yaldızlı ve ezoterik yapay zeka görselleri tasarlamak ve üretmek.",
     backstory="Astroloji ve tarot sembolizmini üst düzey görsel estetikle birleştirip DALL-E 3 ile görsele dönüştürürsün.",
-    tools=[dalle_tool],
+    tools=[generate_dalle_image],
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
@@ -118,7 +131,7 @@ coordinator = Agent(
 def home():
     response_data = json.dumps({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "4.1-VisualAndSocialAgents",
+        "version": "5.0-NativeOpenAI-DallE3",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     }, ensure_ascii=False)
     return Response(response_data, content_type="application/json; charset=utf-8")
@@ -165,7 +178,7 @@ def analyze():
     )
 
     task7 = Task(
-        description="Kreatif konsepti ve mistik analizi görselleştirmek için DALL-E 3 aracını kullanarak lüks, ezoterik ve estetik bir görsel üret. Üretilen görsel URL'sini rapora ekle.",
+        description="Kreatif konsepti ve mistik analizi görselleştirmek için DALL-E 3 görsel üretici aracını kullanarak lüks, ezoterik ve estetik bir görsel üret. Üretilen görsel URL'sini rapora ekle.",
         expected_output="DALL-E 3 tarafından üretilen görselin URL bağlantısı ve kısa görsel tanımı.",
         agent=visual_designer
     )
