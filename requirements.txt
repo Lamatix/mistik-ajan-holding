@@ -1,6 +1,5 @@
 flask
-gunicorn
 crewai
-langchain-openai
 langchain-community
+duckduckgo-search
 openai

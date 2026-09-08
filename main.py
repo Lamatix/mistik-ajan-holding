@@ -1,26 +1,41 @@
 import json
 import os
 import urllib.parse
-from flask import Flask, Response, request
+from functools import wraps
+from flask import Flask, Response, request, jsonify
 from crewai import Agent, Crew, Process, Task
 from langchain_community.tools import DuckDuckGoSearchRun
 from openai import OpenAI
 
 app = Flask(__name__)
 
-# OpenAI Resmi İstemcisi
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# ---------------------------------------------------------
+# GÜVENLİK VE YAPILANDIRMA
+# ---------------------------------------------------------
+API_KEY = os.environ.get("HOLDING_API_KEY", "mistik-secret-key-2026")
+OPENAI_CLIENT = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Canlı Web Arama Aracı
+# Canlı Web Arama Aracı Entegrasyonu
 web_search_tool = DuckDuckGoSearchRun()
+
+def require_api_key(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        # HOLDING_API_KEY tanımlıysa X-API-KEY kontrolü yapar
+        if os.environ.get("HOLDING_API_KEY"):
+            user_key = request.headers.get("X-API-KEY") or request.args.get("api_key")
+            if user_key != API_KEY:
+                return jsonify({"error": "Yetkisiz Erişim. Geçersiz X-API-KEY."}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 def create_dalle_image(prompt_text):
     """
-    OpenAI'ın yeni görsel modeli 'gpt-image-2'yi dener.
-    Yetki/Model hatası alınırsa kesintisiz yedek görsel motoruna (Pollinations AI) geçer.
+    OpenAI'ın güncel görsel modelini dener.
+    Model kısıtlaması veya bakiye/yetki hatası durumunda kesintisiz yedek görsel motoruna geçer.
     """
     try:
-        response = client.images.generate(
+        response = OPENAI_CLIENT.images.generate(
             model="gpt-image-2",
             prompt=f"Luxury, esoteric, highly detailed aesthetic artwork: {prompt_text}",
             size="1024x1024",
@@ -28,48 +43,20 @@ def create_dalle_image(prompt_text):
             n=1,
         )
         return response.data[0].url
-    except Exception as e1:
+    except Exception as e:
         clean_prompt = urllib.parse.quote(f"Luxury esoteric mystic artwork, {prompt_text}")
-        fallback_url = f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&nologo=true"
-        return fallback_url
+        return f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&nologo=true"
 
 # ---------------------------------------------------------
-# AJANLARIN TANIMLANMASI (Canlı Arama Yetenekli Holding Kadrosu)
+# AJANLARIN TANIMLANMASI (Model Routing & Web Search Katmanı)
 # ---------------------------------------------------------
 
+# Derin Derleme & Akıl Yürütme Ajanları (gpt-4o)
 analyst = Agent(
     role="Stratejik Analist ve Piyasa Araştırmacısı",
     goal="Canlı web taraması yaparak en güncel trendleri, piyasa verilerini ve durumları analiz etmek.",
-    backstory="Mistik Ajan Holding'in dijital istihbarat liderisin. İnterneti ve tüm açık kaynak sistemleri anlık tarayarak güncel verileri toplarsın.",
+    backstory="Mistik Ajan Holding'in istihbarat liderisin. İnterneti ve açık kaynak sistemleri anlık tarayarak güncel verileri toplarsın.",
     tools=[web_search_tool],
-    verbose=True,
-    allow_delegation=False,
-    llm="gpt-4o"
-)
-
-risk_consultant = Agent(
-    role="Risk ve Kriz Danışmanı",
-    goal="Ana riskleri, platform kısıtlamalarını ve güncel güvenlik açıklarını tespit etmek.",
-    backstory="Holding'in koruyucu muhafızısın. Güncel kriz ve risk durumlarını web üzerinden tarayarak uyarılarda bulunursun.",
-    tools=[web_search_tool],
-    verbose=True,
-    allow_delegation=False,
-    llm="gpt-4o"
-)
-
-finance_strategist = Agent(
-    role="Kaynak ve Bütçe Stratejisti",
-    goal="Zaman, içerik üretimi ve bütçe verimliliğini planlamak.",
-    backstory="Mali uzmansın. Bütçe ve kaynak önerisini somut tutarsın.",
-    verbose=True,
-    allow_delegation=False,
-    llm="gpt-4o"
-)
-
-operations_director = Agent(
-    role="Saha ve İcra Direktörü",
-    goal="Uygulanabilir 3 adımlık operasyonel eylem planı sunmak.",
-    backstory="Pragmatik uygulayıcısın. Adımları net ve eyleme dönüştürülebilir yazarsın.",
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
@@ -93,13 +80,42 @@ creative_director = Agent(
     llm="gpt-4o"
 )
 
+# Hızlı & Yüksek Verimli İcra Ajanları (gpt-4o-mini)
+risk_consultant = Agent(
+    role="Risk ve Kriz Danışmanı",
+    goal="Ana riskleri, platform kısıtlamalarını ve güvenlik durumlarını tespit etmek.",
+    backstory="Holding muhafızısın. Güncel kriz ve risk durumlarını tarayarak uyarılarda bulunursun.",
+    tools=[web_search_tool],
+    verbose=True,
+    allow_delegation=False,
+    llm="gpt-4o-mini"
+)
+
+finance_strategist = Agent(
+    role="Kaynak ve Bütçe Stratejisti",
+    goal="Zaman, içerik üretimi ve bütçe verimliliğini planlamak.",
+    backstory="Mali uzmansın. Bütçe ve kaynak önerisini somut tutarsın.",
+    verbose=True,
+    allow_delegation=False,
+    llm="gpt-4o-mini"
+)
+
+operations_director = Agent(
+    role="Saha ve İcra Direktörü",
+    goal="Uygulanabilir 3 adımlık operasyonel eylem planı sunmak.",
+    backstory="Pragmatik uygulayıcısın. Adımları net ve eyleme dönüştürülebilir yazarsın.",
+    verbose=True,
+    allow_delegation=False,
+    llm="gpt-4o-mini"
+)
+
 visual_designer = Agent(
     role="Görsel Tasarım Direktörü",
     goal="İçerik konseptine uygun görsel için mükemmel bir İngilizce istem (prompt) yazmak.",
     backstory="Astroloji ve tarot sembolizmini üst düzey görsel estetikle birleştirip görsel istemi hazırlarsın.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o"
+    llm="gpt-4o-mini"
 )
 
 pr_director = Agent(
@@ -108,7 +124,7 @@ pr_director = Agent(
     backstory="Holding'in dışa dönük yüzüsün. Sosyal medya etkileşimini ve otomatik paylaşım akışını yönetirsin.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o"
+    llm="gpt-4o-mini"
 )
 
 coordinator = Agent(
@@ -117,7 +133,7 @@ coordinator = Agent(
     backstory="Holding Orkestra Şefisin. Tüm analizleri ve sosyal medya metinlerini temiz düz metin halinde raporda birleştirirsin.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o"
+    llm="gpt-4o-mini"
 )
 
 # ---------------------------------------------------------
@@ -128,12 +144,13 @@ coordinator = Agent(
 def home():
     response_data = json.dumps({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "10.0-LiveWebIntelligence",
-        "system": "Canlı İnternet Arama Destekli Otonom Üretim Motoru"
+        "version": "12.0-EnterpriseFinal",
+        "system": "Canlı Arama, Model Routing ve Sıfır Hatasız Görsel Motoru"
     }, ensure_ascii=False)
     return Response(response_data, content_type="application/json; charset=utf-8")
 
 @app.route("/analyze", methods=["POST"])
+@require_api_key
 def analyze():
     data = request.get_json() or {}
     user_query = data.get("query", "Hayatımdaki mevcut durumu değerlendirip bana yol haritası ve sosyal medya görseli sun.")
@@ -157,10 +174,11 @@ def analyze():
         agents=[analyst, risk_consultant, finance_strategist, operations_director, mystic_analyst, creative_director, visual_designer, pr_director],
         tasks=[task1, task2, task3, task4, task5, task6, task7, task8],
         process=Process.sequential,
+        memory=True,
         verbose=True
     )
 
-    result = holding_crew.kickoff()
+    holding_crew.kickoff()
 
     image_prompt = str(task7.output) if hasattr(task7, 'output') and task7.output else user_query
     generated_image_url = create_dalle_image(image_prompt)
