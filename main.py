@@ -2,21 +2,18 @@ import json
 import os
 from flask import Flask, Response, request
 from crewai import Agent, Crew, Process, Task
-from langchain_community.tools import DallEQueryRun
-from langchain_community.utilities import DallEAPIWrapper
+from langchain_community.tools.dalle_image_generator import DallEImageGeneratorTool
 
 app = Flask(__name__)
 
 # OpenAI ve DALL-E 3 Kurulumu
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-dalle_wrapper = DallEAPIWrapper(
+dalle_tool = DallEImageGeneratorTool(
     model="dall-e-3",
     size="1024x1024",
-    quality="hd",
-    api_key=OPENAI_API_KEY
+    quality="hd"
 )
-dalle_tool = DallEQueryRun(api_wrapper=dalle_wrapper)
 
 # ---------------------------------------------------------
 # AJANLARIN TANIMLANMASI (Görsel ve Sosyal Medya Odaklı)
@@ -121,7 +118,7 @@ coordinator = Agent(
 def home():
     response_data = json.dumps({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "4.0-VisualAndSocialAgents",
+        "version": "4.1-VisualAndSocialAgents",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     }, ensure_ascii=False)
     return Response(response_data, content_type="application/json; charset=utf-8")
