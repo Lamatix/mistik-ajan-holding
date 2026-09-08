@@ -3,6 +3,12 @@ from flask import Flask, jsonify, request
 from crewai import Agent, Crew, Process, Task
 
 app = Flask(__name__)
+# Türkçe karakterlerin JSON çıktısında düzgün görünmesini sağlar
+app.config['JSON_AS_ASCII'] = False
+
+# ---------------------------------------------------------
+# AJANLARIN TANIMLANMASI (5 Çekirdek Ajan)
+# ---------------------------------------------------------
 
 analyst = Agent(
     role="Stratejik Analist",
@@ -49,9 +55,16 @@ coordinator = Agent(
     llm="gpt-4o"
 )
 
+# ---------------------------------------------------------
+# FLASK ENDPOINT'LERİ
+# ---------------------------------------------------------
+
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"status": "Mistik Ajan Holding Canlıda!", "version": "2.0-5Agents"})
+    return jsonify({
+        "status": "Mistik Ajan Holding Canlıda!",
+        "version": "2.0-5Agents"
+    })
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
