@@ -11,15 +11,19 @@ app = Flask(__name__)
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # ---------------------------------------------------------
-# DALL-E 3 ÖZEL TOOL TANIMI (Doğrudan OpenAI API ile)
+# DALL-E 3 ÖZEL TOOL TANIMI (Esnek Tip Desteği İle)
 # ---------------------------------------------------------
 @tool("DALL-E 3 Görsel Üretim Aracı")
 def generate_dalle_image(prompt: str) -> str:
     """Istenen konsept ve isteme (prompt) gore DALL-E 3 kullanarak yuksek kaliteli bir gorsel uretir ve gorsel URL adresini dondurur."""
     try:
+        # Prompt veri tipini garantiye al
+        if isinstance(prompt, dict):
+            prompt = prompt.get("prompt") or prompt.get("description") or str(prompt)
+        
         response = client.images.generate(
             model="dall-e-3",
-            prompt=prompt,
+            prompt=str(prompt),
             size="1024x1024",
             quality="hd",
             n=1,
@@ -131,7 +135,7 @@ coordinator = Agent(
 def home():
     response_data = json.dumps({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "5.0-NativeOpenAI-DallE3",
+        "version": "5.1-DallEFix",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     }, ensure_ascii=False)
     return Response(response_data, content_type="application/json; charset=utf-8")
@@ -178,8 +182,8 @@ def analyze():
     )
 
     task7 = Task(
-        description="Kreatif konsepti ve mistik analizi görselleştirmek için DALL-E 3 görsel üretici aracını kullanarak lüks, ezoterik ve estetik bir görsel üret. Üretilen görsel URL'sini rapora ekle.",
-        expected_output="DALL-E 3 tarafından üretilen görselin URL bağlantısı ve kısa görsel tanımı.",
+        description="Kreatif konsepti ve mistik analizi görselleştirmek için 'DALL-E 3 Görsel Üretim Aracı' isimli tool'u çağır. 'Slow Down, Reflect, Plan' konseptli lüks ve estetik bir İngilizce görsel istemi (prompt) hazırlayıp bu tool ile görsel üret. Üretilen görsel URL bağlantısını çıktına ekle.",
+        expected_output="DALL-E 3 tarafından üretilen canlı görsel URL bağlantısı.",
         agent=visual_designer
     )
 
@@ -192,6 +196,7 @@ def analyze():
     task9 = Task(
         description=(
             "Tüm ajanlardan gelen analizleri, DALL-E 3 görsel bağlantısını ve sosyal medya paylaşım paketini tek bir raporda birleştir. "
+            "Görsel URL bağlantısını raporda kesinlikle göster. "
             "ÖNEMLİ FORMAT KURALI: Çıktıda kesinlikle `#`, `*`, `-` gibi Markdown kodları KULLANMA. "
             "Raporu tamamen düz metin (plain text) düzeninde sun."
         ),
