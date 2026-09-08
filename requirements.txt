@@ -1,6 +1,6 @@
 flask
 gunicorn
-tiktoken==0.7.0
 crewai
-crewai-tools
 langchain-openai
+langchain-community
+openai
