@@ -15,8 +15,12 @@ app = Flask(__name__)
 API_KEY = os.environ.get("HOLDING_API_KEY", "mistik-secret-key-2026")
 OPENAI_CLIENT = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Canlı Web Arama Aracı
-web_search_tool = DuckDuckGoSearchRun()
+# Canlı Web Arama Aracı Güvenli Yükleme
+try:
+    web_search_tool = DuckDuckGoSearchRun()
+    search_tools = [web_search_tool]
+except Exception:
+    search_tools = []
 
 def require_api_key(f):
     @wraps(f)
@@ -30,9 +34,7 @@ def require_api_key(f):
 
 def create_dalle_image(prompt_text):
     """
-    Görsel üretiminde çökme yaşanmaması için tamamen izole edilmiştir.
-    Önce OpenAI DALL-E / GPT-Image modelini dener, yetki/bakiye veya kütüphane hatasında 
-    anında Pollinations AI yedek motoruna düşer.
+    Görsel üretimi için güvenli katman.
     """
     try:
         response = OPENAI_CLIENT.images.generate(
@@ -44,22 +46,21 @@ def create_dalle_image(prompt_text):
         )
         if response and hasattr(response, 'data') and len(response.data) > 0:
             return response.data[0].url
-    except Exception as e:
+    except Exception:
         pass
 
-    # YEDEK MOTOR (Kesintisiz Görsel Bağlantısı)
     clean_prompt = urllib.parse.quote(f"Luxury esoteric mystic artwork, {prompt_text[:200]}")
     return f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&nologo=true"
 
 # ---------------------------------------------------------
-# AJANLARIN TANIMLANMASI (Model Routing & Web Search Katmanı)
+# AJANLARIN TANIMLANMASI
 # ---------------------------------------------------------
 
 analyst = Agent(
     role="Stratejik Analist ve Piyasa Araştırmacısı",
     goal="Canlı web taraması yaparak en güncel trendleri ve durumları analiz etmek.",
     backstory="Mistik Ajan Holding'in istihbarat liderisiniz.",
-    tools=[web_search_tool],
+    tools=search_tools,
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o"
@@ -87,6 +88,7 @@ risk_consultant = Agent(
     role="Risk ve Kriz Danışmanı",
     goal="Ana riskleri ve kısıtlamaları tespit etmek.",
     backstory="Holding muhafızısınız.",
+    tools=search_tools,
     verbose=True,
     allow_delegation=False,
     llm="gpt-4o-mini"
@@ -145,7 +147,7 @@ coordinator = Agent(
 def home():
     return jsonify({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "13.0-ProductionStable",
+        "version": "14.0-ProductionStable",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     })
 
@@ -210,7 +212,6 @@ def analyze():
         )
 
     except Exception as server_error:
-        # Sunucu çökmesini engelleyen güvenlik ağı
         error_payload = {
             "status": "error",
             "message": f"Holding İşlem Hatası: {str(server_error)}"
