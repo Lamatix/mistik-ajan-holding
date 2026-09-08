@@ -1,5 +1,6 @@
 import json
 import os
+import urllib.parse
 from flask import Flask, Response, request
 from crewai import Agent, Crew, Process, Task
 from openai import OpenAI
@@ -10,11 +11,14 @@ app = Flask(__name__)
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 def create_dalle_image(prompt_text):
-    """Önce DALL-E 3'ü dener, yetki/model hatası alırsa otomatik DALL-E 2'ye geçer."""
-    # DALL-E 3 Denemesi
+    """
+    OpenAI'ın yeni görsel modeli 'gpt-image-2'yi dener.
+    Yetki/Model hatası alınırsa kesintisiz yedek görsel motoruna (Pollinations AI) geçer.
+    """
+    # 1. OpenAI Yeni Görsel Modeli (gpt-image-2)
     try:
         response = client.images.generate(
-            model="dall-e-3",
+            model="gpt-image-2",
             prompt=f"Luxury, esoteric, highly detailed aesthetic artwork: {prompt_text}",
             size="1024x1024",
             quality="hd",
@@ -22,17 +26,10 @@ def create_dalle_image(prompt_text):
         )
         return response.data[0].url
     except Exception as e1:
-        # DALL-E 3 Başarısız olursa DALL-E 2 Fallback Denemesi
-        try:
-            response = client.images.generate(
-                model="dall-e-2",
-                prompt=f"Esoteric aesthetic artwork: {prompt_text[:90]}", # DALL-E 2 kısa prompt ister
-                size="1024x1024",
-                n=1,
-            )
-            return response.data[0].url
-        except Exception as e2:
-            return f"Görsel üretimi başarısız. OpenAI API Yetki/Bakiye hatası: {str(e1)}"
+        # 2. YEDEK MOTOR (Kesintisiz Görsel Üretim Garantisi)
+        clean_prompt = urllib.parse.quote(f"Luxury esoteric mystic artwork, {prompt_text}")
+        fallback_url = f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&nologo=true"
+        return fallback_url
 
 # ---------------------------------------------------------
 # AJANLARIN TANIMLANMASI (9 Ajanlı Holding Kadrosu)
@@ -127,7 +124,7 @@ coordinator = Agent(
 def home():
     response_data = json.dumps({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "7.0-DalleFallbackFix",
+        "version": "9.0-GPTImage2Upgrade",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     }, ensure_ascii=False)
     return Response(response_data, content_type="application/json; charset=utf-8")
@@ -167,7 +164,7 @@ def analyze():
     task9 = Task(
         description=(
             f"Tüm analiz sonuçlarını ve sosyal medya paketini birleştir. "
-            f"Raporun en sonuna şu görsel URL'sini doğrudan ekle: {generated_image_url}\n"
+            f"Raporun en sonuna üretilen görsel bağlantısını doğrudan şu şekilde ekle: Görsel URL: {generated_image_url}\n"
             "ÖNEMLİ FORMAT KURALI: Çıktıda kesinlikle `#`, `*`, `-` gibi Markdown kodları KULLANMA. "
             "Raporu tamamen düz metin (plain text) düzeninde sun."
         ),
