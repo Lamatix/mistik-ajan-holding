@@ -1,27 +1,30 @@
 import requests
+import json
 
-# Render üzerindeki canlı API endpoint adresi
-url = "https://mistik-ajan-holding.onrender.com/analyze"
+# Render Canlı URL'si veya Yerel URL
+URL = "https://mistik-ajan-holding.onrender.com/analyze"
 
-# Ajanlara gönderilecek test sorusu
 payload = {
-    "query": "Astrolojik haritamda Merkür retrosu var. Kariyerim için haftalık tavsiye ve buna uygun bir Instagram görseli üret."
+    "query": "2026 yılı için Mistik Ajan Holding dijital büyüme ve içerik stratejisi analizi yap."
 }
 
 headers = {
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "X-API-KEY": "mistik-secret-key-2026"
 }
 
 print("Mistik Ajan Holding'e istek gönderiliyor, lütfen bekleyin...")
 
 try:
-    response = requests.post(url, json=payload, headers=headers, timeout=180)
+    response = requests.post(URL, json=payload, headers=headers, timeout=120)
+    print(f"Yanıt Kodu: {response.status_code}")
     
-    if response.status_code == 200:
-        print("\n=== HOLDİNG RAPORU VE DALL-E 3 GÖRSEL LINKI ===\n")
-        print(response.json().get("holding_report"))
-    else:
-        print(f"Hata Oluştu! Durum Kodu: {response.status_code}")
+    try:
+        res_json = response.json()
+        print(json.dumps(res_json, indent=2, ensure_ascii=False))
+    except Exception:
+        print("Yanıt Metni:")
         print(response.text)
+
 except Exception as e:
-    print(f"Baglanti Hatasi: {str(e)}")
+    print(f"İstek Hatası: {e}")
