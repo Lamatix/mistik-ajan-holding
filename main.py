@@ -16,6 +16,10 @@ app = Flask(__name__)
 API_KEY = os.environ.get("HOLDING_API_KEY", "mistik-secret-key-2026")
 OPENAI_CLIENT = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+# Model Tanımlamaları (403 Erişim Hatasını Önlemek İçin En Geniş Uyumlu Modeller)
+PRIMARY_MODEL = "gpt-4o-mini"
+LIGHT_MODEL = "gpt-3.5-turbo"
+
 # DuckDuckGo Arama Aracı (CrewAI Uyumlu Sarıcı)
 _ddg_search = DuckDuckGoSearchRun()
 
@@ -42,13 +46,14 @@ def require_api_key(f):
 def create_dalle_image(prompt_text):
     """
     Görsel üretimi için güvenli katman.
+    OpenAI bakiye/izin hatası verirse anında kesintisiz Pollinations AI motoruna düşer.
     """
     try:
         response = OPENAI_CLIENT.images.generate(
-            model="gpt-image-2",
+            model="dall-e-3",
             prompt=f"Luxury, esoteric, highly detailed aesthetic artwork: {prompt_text[:200]}",
             size="1024x1024",
-            quality="hd",
+            quality="standard",
             n=1,
         )
         if response and hasattr(response, 'data') and len(response.data) > 0:
@@ -60,7 +65,7 @@ def create_dalle_image(prompt_text):
     return f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&nologo=true"
 
 # ---------------------------------------------------------
-# AJANLARIN TANIMLANMASI
+# AJANLARIN TANIMLANMASI (Garantili Model Erişim Katmanı)
 # ---------------------------------------------------------
 
 analyst = Agent(
@@ -70,7 +75,7 @@ analyst = Agent(
     tools=search_tools,
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o"
+    llm=PRIMARY_MODEL
 )
 
 mystic_analyst = Agent(
@@ -79,7 +84,7 @@ mystic_analyst = Agent(
     backstory="Mistik Holding'in sezgisel danışmanısınız.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o"
+    llm=PRIMARY_MODEL
 )
 
 creative_director = Agent(
@@ -88,7 +93,7 @@ creative_director = Agent(
     backstory="Kreatif direktörsünüz.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o"
+    llm=PRIMARY_MODEL
 )
 
 risk_consultant = Agent(
@@ -98,7 +103,7 @@ risk_consultant = Agent(
     tools=search_tools,
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o-mini"
+    llm=LIGHT_MODEL
 )
 
 finance_strategist = Agent(
@@ -107,7 +112,7 @@ finance_strategist = Agent(
     backstory="Mali uzmansınız.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o-mini"
+    llm=LIGHT_MODEL
 )
 
 operations_director = Agent(
@@ -116,7 +121,7 @@ operations_director = Agent(
     backstory="Pragmatik uygulayıcısınız.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o-mini"
+    llm=LIGHT_MODEL
 )
 
 visual_designer = Agent(
@@ -125,7 +130,7 @@ visual_designer = Agent(
     backstory="Görsel estetik direktörüsünüz.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o-mini"
+    llm=LIGHT_MODEL
 )
 
 pr_director = Agent(
@@ -134,7 +139,7 @@ pr_director = Agent(
     backstory="Sosyal medya etkileşim yöneticisisiniz.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o-mini"
+    llm=LIGHT_MODEL
 )
 
 coordinator = Agent(
@@ -143,7 +148,7 @@ coordinator = Agent(
     backstory="Holding Orkestra Şefisiniz.",
     verbose=True,
     allow_delegation=False,
-    llm="gpt-4o-mini"
+    llm=LIGHT_MODEL
 )
 
 # ---------------------------------------------------------
@@ -154,7 +159,7 @@ coordinator = Agent(
 def home():
     return jsonify({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "15.0-ProductionStable",
+        "version": "16.0-ProductionStable",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     })
 
