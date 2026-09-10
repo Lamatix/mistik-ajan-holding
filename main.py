@@ -16,9 +16,9 @@ app = Flask(__name__)
 API_KEY = os.environ.get("HOLDING_API_KEY", "mistik-secret-key-2026")
 OPENAI_CLIENT = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Model Tanımlamaları (403 Erişim Hatasını Önlemek İçin En Geniş Uyumlu Modeller)
-PRIMARY_MODEL = "gpt-4o-mini"
-LIGHT_MODEL = "gpt-3.5-turbo"
+# Yüksek Performanslı Model Mimarisi
+HIGH_PERFORMANCE_MODEL = "gpt-4o"
+FAST_MODEL = "gpt-4o-mini"
 
 # DuckDuckGo Arama Aracı (CrewAI Uyumlu Sarıcı)
 _ddg_search = DuckDuckGoSearchRun()
@@ -45,15 +45,14 @@ def require_api_key(f):
 
 def create_dalle_image(prompt_text):
     """
-    Görsel üretimi için güvenli katman.
-    OpenAI bakiye/izin hatası verirse anında kesintisiz Pollinations AI motoruna düşer.
+    DALL-E 3 Görsel Üretim Katmanı (Hata durumunda yedek motor devreye girer)
     """
     try:
         response = OPENAI_CLIENT.images.generate(
             model="dall-e-3",
             prompt=f"Luxury, esoteric, highly detailed aesthetic artwork: {prompt_text[:200]}",
             size="1024x1024",
-            quality="standard",
+            quality="hd",
             n=1,
         )
         if response and hasattr(response, 'data') and len(response.data) > 0:
@@ -65,35 +64,35 @@ def create_dalle_image(prompt_text):
     return f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&nologo=true"
 
 # ---------------------------------------------------------
-# AJANLARIN TANIMLANMASI (Garantili Model Erişim Katmanı)
+# AJANLARIN TANIMLANMASI (GPT-4o & GPT-4o-mini Katmanı)
 # ---------------------------------------------------------
 
 analyst = Agent(
     role="Stratejik Analist ve Piyasa Araştırmacısı",
-    goal="Canlı web taraması yaparak en güncel trendleri ve durumları analiz etmek.",
-    backstory="Mistik Ajan Holding'in istihbarat liderisiniz.",
+    goal="Canlı web taraması yaparak en güncel trendleri ve durumları derinlemesine analiz etmek.",
+    backstory="Mistik Ajan Holding'in üst düzey istihbarat liderisiniz.",
     tools=search_tools,
     verbose=True,
     allow_delegation=False,
-    llm=PRIMARY_MODEL
+    llm=HIGH_PERFORMANCE_MODEL
 )
 
 mystic_analyst = Agent(
     role="Mistik ve Astrolojik Analist",
-    goal="Konunun sezgisel, astrolojik ve ezoterik boyutunu incelemek.",
-    backstory="Mistik Holding'in sezgisel danışmanısınız.",
+    goal="Konunun sezgisel, astrolojik ve ezoterik boyutunu derinlemesine incelemek.",
+    backstory="Mistik Holding'in ana sezgisel danışmanısınız.",
     verbose=True,
     allow_delegation=False,
-    llm=PRIMARY_MODEL
+    llm=HIGH_PERFORMANCE_MODEL
 )
 
 creative_director = Agent(
     role="İçerik ve Senaryo Üreticisi",
-    goal="Stratejiyi ve mistik analizi sosyal medya senaryolarına dönüştürmek.",
+    goal="Stratejiyi ve mistik analizi yüksek etkileşimli sosyal medya senaryolarına dönüştürmek.",
     backstory="Kreatif direktörsünüz.",
     verbose=True,
     allow_delegation=False,
-    llm=PRIMARY_MODEL
+    llm=HIGH_PERFORMANCE_MODEL
 )
 
 risk_consultant = Agent(
@@ -103,7 +102,7 @@ risk_consultant = Agent(
     tools=search_tools,
     verbose=True,
     allow_delegation=False,
-    llm=LIGHT_MODEL
+    llm=FAST_MODEL
 )
 
 finance_strategist = Agent(
@@ -112,7 +111,7 @@ finance_strategist = Agent(
     backstory="Mali uzmansınız.",
     verbose=True,
     allow_delegation=False,
-    llm=LIGHT_MODEL
+    llm=FAST_MODEL
 )
 
 operations_director = Agent(
@@ -121,7 +120,7 @@ operations_director = Agent(
     backstory="Pragmatik uygulayıcısınız.",
     verbose=True,
     allow_delegation=False,
-    llm=LIGHT_MODEL
+    llm=FAST_MODEL
 )
 
 visual_designer = Agent(
@@ -130,7 +129,7 @@ visual_designer = Agent(
     backstory="Görsel estetik direktörüsünüz.",
     verbose=True,
     allow_delegation=False,
-    llm=LIGHT_MODEL
+    llm=FAST_MODEL
 )
 
 pr_director = Agent(
@@ -139,7 +138,7 @@ pr_director = Agent(
     backstory="Sosyal medya etkileşim yöneticisisiniz.",
     verbose=True,
     allow_delegation=False,
-    llm=LIGHT_MODEL
+    llm=FAST_MODEL
 )
 
 coordinator = Agent(
@@ -148,7 +147,7 @@ coordinator = Agent(
     backstory="Holding Orkestra Şefisiniz.",
     verbose=True,
     allow_delegation=False,
-    llm=LIGHT_MODEL
+    llm=FAST_MODEL
 )
 
 # ---------------------------------------------------------
@@ -159,7 +158,7 @@ coordinator = Agent(
 def home():
     return jsonify({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "16.0-ProductionStable",
+        "version": "19.0-GPT4o-Production",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     })
 
@@ -170,12 +169,12 @@ def analyze():
         data = request.get_json() or {}
         user_query = data.get("query", "Hayatımdaki mevcut durumu değerlendirip bana yol haritası ve sosyal medya görseli sun.")
 
-        task1 = Task(description=f"Durumu 2 cümleyle analiz et: {user_query}", expected_output="Canlı veri destekli durum analizi.", agent=analyst)
-        task2 = Task(description="En kritik 2 riski maddeler halinde yaz.", expected_output="Kısa risk maddeleri.", agent=risk_consultant)
-        task3 = Task(description="Bütçe ve zaman verimliliği için 2 somut tavsiye ver.", expected_output="Kısa bütçe tavsiyeleri.", agent=finance_strategist)
-        task4 = Task(description="Uygulanabilir 3 eylem adımı belirt.", expected_output="3 eylem adımı.", agent=operations_director)
-        task5 = Task(description="Konuya dair 1 cümlelik mistik/sezgisel ve zamanlama tavsiyesi ver.", expected_output="Mistik/sezgisel analiz.", agent=mystic_analyst)
-        task6 = Task(description="Bu durum için 1 adet kanca (hook) odaklı sosyal medya Reels/Shorts senaryo fikri yaz.", expected_output="Kreatif içerik senaryosu.", agent=creative_director)
+        task1 = Task(description=f"Durumu detaylı ve derinlemesine analiz et: {user_query}", expected_output="Canlı veri destekli kapsamlı durum analizi.", agent=analyst)
+        task2 = Task(description="En kritik riskleri ve dikkat edilmesi gereken noktaları yaz.", expected_output="Risk maddeleri.", agent=risk_consultant)
+        task3 = Task(description="Bütçe ve zaman verimliliği için somut tavsiyeler ver.", expected_output="Bütçe tavsiyeleri.", agent=finance_strategist)
+        task4 = Task(description="Uygulanabilir 3 adımlık eylem planı belirt.", expected_output="3 eylem adımı.", agent=operations_director)
+        task5 = Task(description="Konuya dair mistik/sezgisel ve zamanlama tavsiyesi ver.", expected_output="Mistik/sezgisel analiz.", agent=mystic_analyst)
+        task6 = Task(description="Bu durum için kanca (hook) odaklı sosyal medya Reels/Shorts senaryo fikri yaz.", expected_output="Kreatif içerik senaryosu.", agent=creative_director)
         task7 = Task(description="Bu konsept için lüks, ezoterik, detaylı 1 cümlelik İNGİLİZCE görsel prompt'u yaz. Sadece prompt metnini ver.", expected_output="İngilizce görsel prompt.", agent=visual_designer)
         task8 = Task(description="Instagram/TikTok paylaşımı için gönderi açıklama metni (caption), 5 adet ilgili hashtag ve paylaşım için ideal zamanı belirle.", expected_output="Sosyal medya paylaşım paketi.", agent=pr_director)
 
@@ -193,7 +192,7 @@ def analyze():
 
         task9 = Task(
             description=(
-                f"Tüm analiz sonuçlarını ve sosyal medya paketini birleştir. "
+                f"Tüm detaylı analiz sonuçlarını ve sosyal medya paketini mükemmel bir düzenle birleştir. "
                 f"Raporun en sonuna üretilen görsel bağlantısını doğrudan şu şekilde ekle: Görsel URL: {generated_image_url}\n"
                 "ÖNEMLİ FORMAT KURALI: Çıktıda kesinlikle `#`, `*`, `-` gibi Markdown kodları KULLANMA. "
                 "Raporu tamamen düz metin (plain text) düzeninde sun."
