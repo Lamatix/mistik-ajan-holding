@@ -11,12 +11,10 @@ from openai import OpenAI
 app = Flask(__name__)
 
 # ---------------------------------------------------------
-# GÜVENLİK VE YAPILANDIRMA
+# GÜVENLİK VE YARDIMCI ARAÇLAR
 # ---------------------------------------------------------
 API_KEY = os.environ.get("HOLDING_API_KEY", "mistik-secret-key-2026")
-OPENAI_CLIENT = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# DuckDuckGo Arama Aracı (CrewAI Uyumlu Sarıcı)
 _ddg_search = DuckDuckGoSearchRun()
 
 @tool("Web Search Tool")
@@ -41,27 +39,30 @@ def require_api_key(f):
 
 def create_dalle_image(prompt_text):
     """
-    Görsel Üretim Katmanı: DALL-E 3 dener, hata alırsa kesintisiz Pollinations AI kullanır.
+    Görsel Üretim Katmanı: DALL-E 3 dener, erişim yoksa Pollinations AI kullanır.
     """
-    try:
-        response = OPENAI_CLIENT.images.generate(
-            model="dall-e-3",
-            prompt=f"Luxury, esoteric, highly detailed aesthetic artwork: {prompt_text[:200]}",
-            size="1024x1024",
-            quality="hd",
-            n=1,
-        )
-        if response and hasattr(response, 'data') and len(response.data) > 0:
-            return response.data[0].url
-    except Exception:
-        pass
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    if openai_api_key:
+        try:
+            client = OpenAI(api_key=openai_api_key)
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=f"Luxury, esoteric, highly detailed aesthetic artwork: {prompt_text[:200]}",
+                size="1024x1024",
+                quality="hd",
+                n=1,
+            )
+            if response and hasattr(response, 'data') and len(response.data) > 0:
+                return response.data[0].url
+        except Exception:
+            pass
 
     clean_prompt = urllib.parse.quote(f"Luxury esoteric mystic artwork, {prompt_text[:200]}")
     return f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&nologo=true"
 
-def run_holding_pipeline(primary_model, secondary_model):
+def build_agents(primary_model, secondary_model):
     """
-    Ajanları ve görevleri verilen model yetkileriyle çalıştıran ana motor.
+    Ajanları çalışma anında dinamik olarak yapılandırır.
     """
     analyst = Agent(
         role="Stratejik Analist ve Piyasa Araştırmacısı",
@@ -166,7 +167,7 @@ def run_holding_pipeline(primary_model, secondary_model):
 def home():
     return jsonify({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "20.0-ResilientProduction",
+        "version": "21.0-DynamicKeyProduction",
         "system": "Otonom Görsel Tasarım ve Sosyal Medya Üretim Motoru"
     })
 
@@ -176,7 +177,7 @@ def analyze():
     data = request.get_json() or {}
     user_query = data.get("query", "Hayatımdaki mevcut durumu değerlendirip bana yol haritası ve sosyal medya görseli sun.")
 
-    # Otomatik Geçiş Silsilesi (Erişim Yetkisine Göre En Güçlüden En Stabile)
+    # Model Deneme Silsilesi
     model_pairs = [
         ("gpt-4o", "gpt-4o-mini"),
         ("gpt-4o-mini", "gpt-4o-mini"),
@@ -187,7 +188,7 @@ def analyze():
 
     for primary_model, secondary_model in model_pairs:
         try:
-            agents = run_holding_pipeline(primary_model, secondary_model)
+            agents = build_agents(primary_model, secondary_model)
 
             task1 = Task(description=f"Durumu detaylı analiz et: {user_query}", expected_output="Canlı veri destekli durum analizi.", agent=agents["analyst"])
             task2 = Task(description="En kritik riskleri ve kısıtlamaları yaz.", expected_output="Risk maddeleri.", agent=agents["risk_consultant"])
@@ -245,10 +246,8 @@ def analyze():
 
         except Exception as e:
             last_exception = e
-            # Eğer hata 403 / model erişimi veya bakiye hatası ise bir sonraki alt modele geçip tekrar dener
             continue
 
-    # Tüm modeller başarısız olursa döndürülecek güvenlik yanıtı
     error_payload = {
         "status": "error",
         "message": f"Holding İşlem Hatası: {str(last_exception)}"
