@@ -4,25 +4,11 @@ import urllib.parse
 from functools import wraps
 from flask import Flask, Response, request, jsonify
 from crewai import Agent, Crew, Process, Task, LLM
-from crewai.tools import tool
-from langchain_community.tools import DuckDuckGoSearchRun
 from openai import OpenAI
 
 app = Flask(__name__)
 
 API_KEY = os.environ.get("HOLDING_API_KEY", "mistik-secret-key-2026")
-
-_ddg_search = DuckDuckGoSearchRun()
-
-@tool("Web Search Tool")
-def execute_web_search(query: str) -> str:
-    """İnternette güncel bilgi ve trend araması yapar."""
-    try:
-        return _ddg_search.run(query)
-    except Exception as e:
-        return f"Arama hatası: {str(e)}"
-
-search_tools = [execute_web_search]
 
 def require_api_key(f):
     @wraps(f)
@@ -57,14 +43,14 @@ def create_dalle_image(prompt_text, api_key):
 def home():
     return jsonify({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "27.0-FastAgencyEngine"
+        "version": "28.0-StableAgencyEngine"
     })
 
 @app.route("/analyze", methods=["POST"])
 @require_api_key
 def analyze():
     data = request.get_json() or {}
-    user_query = data.get("query", "Mistik Ajan Holding için 2026 sosyal medya stratejisi oluştur.")
+    user_query = data.get("query", "Mistik Ajan Holding için 2026 sosyal medya ve büyüme stratejisi oluştur.")
     
     openai_key = os.environ.get("OPENAI_API_KEY")
 
@@ -74,103 +60,53 @@ def analyze():
             api_key=openai_key
         )
 
-        # --- OPTİMİZE EDİLMİŞ 5 AJAN ---
-        trend_hunter = Agent(
-            role="Trend ve Akım Takipçisi",
-            goal="Sektördeki en son viral akımları ve pazarlama trendlerini tespit etmek.",
-            backstory="Sosyal medyanın nabzını tutan dijital trend avcısısınız.",
-            tools=search_tools, # Sadece trend hunter arama yapar
-            verbose=True,
+        # RAM dostu 2 ana uzman birim
+        intelligence_lead = Agent(
+            role="Trend, Rakip ve Strateji Direktörü",
+            goal="Sektörel trendleri, rakip boşluklarını ve Mistik Ajan Holding için ana büyüme stratejisini çıkarmak.",
+            backstory="Pazar istihbaratı ve stratejik kararlardan sorumlu lider ajan.",
+            verbose=False,
             allow_delegation=False,
             llm=llm
         )
 
-        competitor_analyst = Agent(
-            role="Sektör ve Rakip Analisti",
-            goal="Rakiplerin zayıf noktalarını ve farklılaşma fırsatlarını belirlemek.",
-            backstory="Pazarı hızla analiz eden istihbarat uzmanısınız.",
-            verbose=True,
+        production_lead = Agent(
+            role="Kreatif ve Video Kurgu Yönetmeni",
+            goal="Stratejiye uygun viral Reels senaryosu, kurgu rehberi ve İngilizce görsel prompt yazmak.",
+            backstory="Içerik kurgusu ve görsel direktörlükten sorumlu kreatif lider.",
+            verbose=False,
             allow_delegation=False,
             llm=llm
         )
 
-        strategy_lead = Agent(
-            role="Holding Strateji Direktörü",
-            goal="Trend ve rakip verilerini birleştirerek holding büyüme stratejisini çizmek.",
-            backstory="Mistik Ajan Holding'in karar verici liderisiniz.",
-            verbose=True,
-            allow_delegation=False,
-            llm=llm
+        task1 = Task(
+            description=f"Şu konuyu trendler, rakip fırsatları ve holding stratejisi açısından analiz et: {user_query}. Çıktıyı 3 ayrı başlıkta sun: 1- Trendler, 2- Rakip Analizi, 3- Ana Strateji.",
+            expected_output="Trend, Rakip ve Strateji Raporu.",
+            agent=intelligence_lead
         )
 
-        creative_director = Agent(
-            role="Kreatif ve İçerik Direktörü",
-            goal="Stratejiye uygun kanca odaklı Reels senaryosu ve İngilizce görsel prompt üretmek.",
-            backstory="Sıra dışı fikirlerle kitleleri etkileyen kreatif liderisiniz.",
-            verbose=True,
-            allow_delegation=False,
-            llm=llm
-        )
-
-        video_editor = Agent(
-            role="Video Montaj ve Kurgu Yönetmeni",
-            goal="Senaryo için kurgu, geçiş (transition) ve ses efekti (SFX) rehberi hazırlamak.",
-            backstory="Reels videolarının izlenme sürelerini artıran uzman kurgucusunuz.",
-            verbose=True,
-            allow_delegation=False,
-            llm=llm
-        )
-
-        # --- KISA VE NET GÖREVLER ---
-        t1 = Task(
-            description=f"Şu konu hakkındaki güncel trendleri kısaca araştır: {user_query}",
-            expected_output="Önemli trendler özeti.",
-            agent=trend_hunter
-        )
-
-        t2 = Task(
-            description=f"Konuyla ilgili rakip fırsatlarını değerlendir: {user_query}",
-            expected_output="Rakip analizi özeti.",
-            agent=competitor_analyst
-        )
-
-        t3 = Task(
-            description="Verileri sentezleyip Mistik Ajan Holding için 3 maddelik ana stratejiyi yaz.",
-            expected_output="Holding Büyüme Stratejisi.",
-            agent=strategy_lead
-        )
-
-        t4 = Task(
-            description="Stratejiye uygun kanca odaklı Reels senaryosu yaz ve en sona lüks 1 cümlelik İNGİLİZCE görsel prompt'u ekle.",
-            expected_output="Kreatif senaryo ve İngilizce görsel prompt.",
-            agent=creative_director
-        )
-
-        t5 = Task(
-            description="Senaryo için kurgu, geçiş ve ses efektleri rehberini yaz.",
-            expected_output="Video kurgu rehberi.",
-            agent=video_editor
+        task2 = Task(
+            description="Stratejiye uygun viral kanca odaklı Reels senaryosu, saniye saniye kurgu/geçiş rehberi ve en sona 1 cümlelik İNGİLİZCE görsel prompt ekle.",
+            expected_output="Reels Senaryosu, Kurgu Rehberi ve İngilizce Görsel Prompt.",
+            agent=production_lead
         )
 
         holding_crew = Crew(
-            agents=[trend_hunter, competitor_analyst, strategy_lead, creative_director, video_editor],
-            tasks=[t1, t2, t3, t4, t5],
+            agents=[intelligence_lead, production_lead],
+            tasks=[task1, task2],
             process=Process.sequential,
-            verbose=True
+            verbose=False
         )
 
         holding_crew.kickoff()
 
-        image_prompt = str(t4.output) if hasattr(t4, 'output') and t4.output else user_query
+        image_prompt = str(task2.output) if hasattr(task2, 'output') and task2.output else user_query
         generated_image_url = create_dalle_image(image_prompt, openai_key)
 
         response_payload = {
             "status": "success",
-            "trend_report": str(t1.output),
-            "competitor_report": str(t2.output),
-            "master_strategy": str(t3.output),
-            "creative_package": str(t4.output),
-            "video_editing_guide": str(t5.output),
+            "intelligence_and_strategy": str(task1.output),
+            "creative_and_video_guide": str(task2.output),
             "generated_image_url": generated_image_url
         }
 
