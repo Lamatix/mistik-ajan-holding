@@ -16,7 +16,7 @@ _ddg_search = DuckDuckGoSearchRun()
 
 @tool("Web Search Tool")
 def execute_web_search(query: str) -> str:
-    """İnternette güncel bilgi, trend ve rakip analizi verisi arar."""
+    """İnternette güncel bilgi ve trend araması yapar."""
     try:
         return _ddg_search.run(query)
     except Exception as e:
@@ -57,14 +57,14 @@ def create_dalle_image(prompt_text, api_key):
 def home():
     return jsonify({
         "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "26.0-FullAgencyEngine"
+        "version": "27.0-FastAgencyEngine"
     })
 
 @app.route("/analyze", methods=["POST"])
 @require_api_key
 def analyze():
     data = request.get_json() or {}
-    user_query = data.get("query", "Mistik Ajan Holding için 2026 sosyal medya ve büyüme stratejisi oluştur.")
+    user_query = data.get("query", "Mistik Ajan Holding için 2026 sosyal medya stratejisi oluştur.")
     
     openai_key = os.environ.get("OPENAI_API_KEY")
 
@@ -74,12 +74,12 @@ def analyze():
             api_key=openai_key
         )
 
-        # --- AJAN KADROSU ---
+        # --- OPTİMİZE EDİLMİŞ 5 AJAN ---
         trend_hunter = Agent(
             role="Trend ve Akım Takipçisi",
-            goal="Sektördeki en son viral akımları, popüler sesleri ve pazarlama trendlerini tespit etmek.",
-            backstory="Sosyal medyanın nabzını tutan, dijital trend avcısısınız.",
-            tools=search_tools,
+            goal="Sektördeki en son viral akımları ve pazarlama trendlerini tespit etmek.",
+            backstory="Sosyal medyanın nabzını tutan dijital trend avcısısınız.",
+            tools=search_tools, # Sadece trend hunter arama yapar
             verbose=True,
             allow_delegation=False,
             llm=llm
@@ -87,9 +87,8 @@ def analyze():
 
         competitor_analyst = Agent(
             role="Sektör ve Rakip Analisti",
-            goal="Rakiplerin stratejilerini, zayıf noktalarını ve farklılaşma fırsatlarını belirlemek.",
-            backstory="Pazardaki tüm oyuncuları inceleyen deneyimli bir pazar istihbarat uzmanısınız.",
-            tools=search_tools,
+            goal="Rakiplerin zayıf noktalarını ve farklılaşma fırsatlarını belirlemek.",
+            backstory="Pazarı hızla analiz eden istihbarat uzmanısınız.",
             verbose=True,
             allow_delegation=False,
             llm=llm
@@ -97,8 +96,8 @@ def analyze():
 
         strategy_lead = Agent(
             role="Holding Strateji Direktörü",
-            goal="Trend ve rakip analizlerini birleştirerek holding için ana büyüme stratejisini çizmek.",
-            backstory="Mistik Ajan Holding'in karar vericisi ve strateji liderisiniz.",
+            goal="Trend ve rakip verilerini birleştirerek holding büyüme stratejisini çizmek.",
+            backstory="Mistik Ajan Holding'in karar verici liderisiniz.",
             verbose=True,
             allow_delegation=False,
             llm=llm
@@ -106,8 +105,8 @@ def analyze():
 
         creative_director = Agent(
             role="Kreatif ve İçerik Direktörü",
-            goal="Stratejiye uygun viral kanca (hook) odaklı senaryolar ve metin paketleri oluşturmak.",
-            backstory="Sıra dışı fikirler ve hikaye anlatımıyla kitleleri etkileyen kreatif liderisiniz.",
+            goal="Stratejiye uygun kanca odaklı Reels senaryosu ve İngilizce görsel prompt üretmek.",
+            backstory="Sıra dışı fikirlerle kitleleri etkileyen kreatif liderisiniz.",
             verbose=True,
             allow_delegation=False,
             llm=llm
@@ -115,41 +114,41 @@ def analyze():
 
         video_editor = Agent(
             role="Video Montaj ve Kurgu Yönetmeni",
-            goal="Senaryoyu saniye saniye görsel geçişler, ses efektleri ve kurgu notları içeren montaj planına dönüştürmek.",
-            backstory="Reels/Shorts videolarının izlenme sürelerini (watch time) tavan yaptıran uzman kurgucusunuz.",
+            goal="Senaryo için kurgu, geçiş (transition) ve ses efekti (SFX) rehberi hazırlamak.",
+            backstory="Reels videolarının izlenme sürelerini artıran uzman kurgucusunuz.",
             verbose=True,
             allow_delegation=False,
             llm=llm
         )
 
-        # --- GÖREV ZİNCİRİ ---
+        # --- KISA VE NET GÖREVLER ---
         t1 = Task(
-            description=f"Şu konu hakkındaki güncel trendleri ve viral akımları araştır: {user_query}",
-            expected_output="Önemli trendler ve popüler akımlar raporu.",
+            description=f"Şu konu hakkındaki güncel trendleri kısaca araştır: {user_query}",
+            expected_output="Önemli trendler özeti.",
             agent=trend_hunter
         )
 
         t2 = Task(
-            description=f"Konuyla ilgili rakiplerin durumunu incele ve boşlukları (fırsatları) tespit et: {user_query}",
-            expected_output="Rakip analizi ve pazar fırsatları raporu.",
+            description=f"Konuyla ilgili rakip fırsatlarını değerlendir: {user_query}",
+            expected_output="Rakip analizi özeti.",
             agent=competitor_analyst
         )
 
         t3 = Task(
-            description="Trend ve rakip verilerini sentezleyerek Mistik Ajan Holding için ana strateji planını oluştur.",
-            expected_output="Kapsamlı Holding Büyüme Stratejisi.",
+            description="Verileri sentezleyip Mistik Ajan Holding için 3 maddelik ana stratejiyi yaz.",
+            expected_output="Holding Büyüme Stratejisi.",
             agent=strategy_lead
         )
 
         t4 = Task(
-            description="Strateji doğrultusunda viral kanca (hook) odaklı Reels senaryosu yaz ve en sona lüks 1 cümlelik İNGİLİZCE görsel prompt'u ekle.",
-            expected_output="Kreatif senaryo paketi ve İngilizce görsel prompt.",
+            description="Stratejiye uygun kanca odaklı Reels senaryosu yaz ve en sona lüks 1 cümlelik İNGİLİZCE görsel prompt'u ekle.",
+            expected_output="Kreatif senaryo ve İngilizce görsel prompt.",
             agent=creative_director
         )
 
         t5 = Task(
-            description="Yazılan senaryo için saniye saniye montaj, kurgu geçişleri, text overlay ve ses efekti (SFX) rehberi hazırla.",
-            expected_output="Saniye saniye video montaj ve kurgu rehberi.",
+            description="Senaryo için kurgu, geçiş ve ses efektleri rehberini yaz.",
+            expected_output="Video kurgu rehberi.",
             agent=video_editor
         )
 
