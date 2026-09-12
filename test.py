@@ -8,8 +8,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 
-# YENİ CANLI URL: mts.onrender.com
-url = "https://mts.onrender.com/analyze"
+# Mevcut Canlı Servis Adresiniz
+url = "https://mistik-ajan-holding.onrender.com/analyze"
 headers = {
     "Content-Type": "application/json",
     "X-API-KEY": "mistik-secret-key-2026"
@@ -18,10 +18,11 @@ headers = {
 # Google Sheets Webhook URL
 GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxcgc69O8M1UmPKpooW-9Qs481rb9FaX8MIWwNYhhq-nSsdhU_j31C4u3CoTVu7-QXegQ/exec"
 
+# Gönderilecek İstek Metni
 query_text = "Mystic Thread Studio için 2026 sosyal medya ve büyüme stratejisi oluştur."
 data = {"query": query_text}
 
-print("Mystic Thread Studio'ya (https://mts.onrender.com) istek gönderiliyor...")
+print("Mystic Thread Studio'ya (https://mistik-ajan-holding.onrender.com) istek gönderiliyor...")
 
 try:
     response = requests.post(url, json=data, headers=headers, timeout=300)
@@ -29,6 +30,7 @@ try:
     if response.status_code == 200:
         result = response.json()
         
+        # Raporların kaydedileceği klasör
         output_dir = "holding_raporlari"
         os.makedirs(output_dir, exist_ok=True)
         
@@ -39,11 +41,11 @@ try:
         filename_txt = os.path.join(output_dir, f"rapor_{timestamp}.txt")
         filename_pdf = os.path.join(output_dir, f"rapor_{timestamp}.pdf")
         
-        # 1. JSON Kaydı
+        # 1. JSON Olarak Kaydet
         with open(filename_json, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=4)
             
-        # 2. TXT Kaydı
+        # 2. TXT Olarak Kaydet
         with open(filename_txt, "w", encoding="utf-8") as f:
             f.write(f"=== MYSTIC THREAD STUDIO RAPORU ({timestamp}) ===\n")
             f.write(f"SORGU / KONU: {query_text}\n\n")
@@ -54,7 +56,7 @@ try:
             f.write("--- ÜRETİLEN GÖRSEL URL ---\n")
             f.write(result.get("generated_image_url", "") + "\n")
             
-        # 3. PDF Oluşturma (ReportLab)
+        # 3. PDF Olarak Kaydet (ReportLab)
         doc = SimpleDocTemplate(filename_pdf, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
         styles = getSampleStyleSheet()
         
@@ -80,7 +82,7 @@ try:
         ]
         doc.build(elements)
 
-        # 4. Google Sheets Otomatik Kayıt
+        # 4. Google Sheets Webhook'una Veri Gönder
         sheet_payload = {
             "date": date_str,
             "query": query_text,
