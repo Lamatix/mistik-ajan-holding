@@ -17,13 +17,13 @@ HTML_DASHBOARD = """
     <title>Mystic Thread Studio - Komut Merkezi</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0f172a; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; }
         .btn-primary { background-color: #6366f1; border: none; font-weight: 600; padding: 12px; }
         .btn-primary:hover { background-color: #4f46e5; }
-        .form-control { background-color: #0f172a; border: 1px solid #334155; color: #f8fafc; }
-        .form-control:focus { background-color: #0f172a; color: #f8fafc; border-color: #6366f1; box-shadow: none; }
-        .result-box { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; }
+        .form-control { background-color: #0f172a; border: 1px solid #334155; color: #ffffff; }
+        .form-control:focus { background-color: #0f172a; color: #ffffff; border-color: #6366f1; box-shadow: none; }
+        .result-box { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: #ffffff !important; }
         .badge-agent { background-color: #312e81; color: #a5b4fc; border: 1px solid #4338ca; }
         .logo-glow { filter: drop-shadow(0px 0px 8px rgba(99, 102, 241, 0.6)); }
     </style>
@@ -76,14 +76,14 @@ HTML_DASHBOARD = """
                         <div class="d-flex align-items-center mb-3">
                             <span class="badge badge-agent me-2 px-3 py-2">İstihbarat & Strateji Direktörlüğü</span>
                         </div>
-                        <div id="stratResult" class="result-box text-slate-200"></div>
+                        <div id="stratResult" class="result-box"></div>
                     </div>
 
                     <div class="card p-4 mb-4 shadow">
                         <div class="d-flex align-items-center mb-3">
                             <span class="badge badge-agent me-2 px-3 py-2">Kreatif & Video Kurgu Yönetmenliği</span>
                         </div>
-                        <div id="creativeResult" class="result-box text-slate-200"></div>
+                        <div id="creativeResult" class="result-box"></div>
                     </div>
 
                     <div class="card p-4 shadow">
@@ -175,7 +175,6 @@ def analyze():
         if not openai_key:
             return jsonify({"error": "OPENAI_API_KEY environment variable is missing on Render."}), 500
 
-        # En stabil model tanımı
         llm_model = "gpt-4o-mini"
 
         strategy_agent = Agent(
