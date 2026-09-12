@@ -172,16 +172,15 @@ def analyze():
     user_query = data.get("query", "Mystic Thread Studio için 2026 büyüme stratejisi oluştur.")
 
     try:
-        # GEMINI_API_KEY veya GOOGLE_API_KEY değişkenini dinamik oku ve doğrudan sağla
         gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         if not gemini_key:
             return jsonify({"error": "GEMINI_API_KEY environment variable is missing on Render."}), 500
 
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
-            api_key=gemini_key,
-            google_api_key=gemini_key
-        )
+        # CrewAI ve LiteLLM için GEMINI_API_KEY ortama garanti edilsin
+        os.environ["GEMINI_API_KEY"] = gemini_key
+
+        # CrewAI native Gemini string formatı
+        llm_model = "gemini/gemini-1.5-flash"
 
         strategy_agent = Agent(
             role="İstihbarat ve Strateji Direktörü",
@@ -189,7 +188,7 @@ def analyze():
             backstory="Sen Mystic Thread Studio'nun en kıdemli stratejistisin. Verileri analiz eder, trendleri yakalar ve en etkili büyüme adımlarını belirlersin.",
             verbose=False,
             allow_delegation=False,
-            llm=llm
+            llm=llm_model
         )
 
         creative_agent = Agent(
@@ -198,7 +197,7 @@ def analyze():
             backstory="Sen Mystic Thread Studio'nun kreatif dahi direktörüsün. İzleyiciyi ilk 3 saniyede yakalayan viral video senaryoları ve görsel konseptler tasarlarsın.",
             verbose=False,
             allow_delegation=False,
-            llm=llm
+            llm=llm_model
         )
 
         task_strategy = Task(
