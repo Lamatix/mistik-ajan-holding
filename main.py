@@ -171,15 +171,12 @@ def analyze():
     user_query = data.get("query", "Mystic Thread Studio için 2026 büyüme stratejisi oluştur.")
 
     try:
-        gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        if not gemini_key:
-            return jsonify({"error": "GEMINI_API_KEY environment variable is missing on Render."}), 500
+        openai_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_key:
+            return jsonify({"error": "OPENAI_API_KEY environment variable is missing on Render."}), 500
 
-        # Ortam değişkenlerini CrewAI/LiteLLM için tanımla
-        os.environ["GEMINI_API_KEY"] = gemini_key
-
-        # Google API v1 ile tam uyumlu resmi Gemini model ismi
-        llm_model = "gemini/gemini-1.5-flash-latest"
+        # En stabil model tanımı
+        llm_model = "gpt-4o-mini"
 
         strategy_agent = Agent(
             role="İstihbarat ve Strateji Direktörü",
