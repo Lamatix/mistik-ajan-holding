@@ -1,13 +1,15 @@
 import os
+import urllib.parse
 from flask import Flask, request, jsonify, render_template_string
 from crewai import Agent, Task, Crew, Process
+from openai import OpenAI
 
 app = Flask(__name__)
 
 # Konfigürasyon ve Güvenlik
 EXPECTED_API_KEY = os.environ.get("X_API_KEY", "mistik-secret-key-2026")
 
-# Web Dashboard HTML Arayüzü (Mystic Thread Studio Markalı)
+# Web Dashboard HTML Arayüzü (Mystic Thread Studio Markalı & Beyaz Metin Odaklı)
 HTML_DASHBOARD = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -17,21 +19,66 @@ HTML_DASHBOARD = """
     <title>Mystic Thread Studio - Komut Merkezi</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #0f172a; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; }
-        .btn-primary { background-color: #6366f1; border: none; font-weight: 600; padding: 12px; }
-        .btn-primary:hover { background-color: #4f46e5; }
-        .form-control { background-color: #0f172a; border: 1px solid #334155; color: #ffffff; }
-        .form-control:focus { background-color: #0f172a; color: #ffffff; border-color: #6366f1; box-shadow: none; }
-        .result-box { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: #ffffff !important; }
-        .badge-agent { background-color: #312e81; color: #a5b4fc; border: 1px solid #4338ca; }
-        .logo-glow { filter: drop-shadow(0px 0px 8px rgba(99, 102, 241, 0.6)); }
+        body { 
+            background-color: #0f172a; 
+            color: #ffffff; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+        .card { 
+            background-color: #1e293b; 
+            border: 1px solid #334155; 
+            border-radius: 12px; 
+            color: #ffffff;
+        }
+        .btn-primary { 
+            background-color: #6366f1; 
+            border: none; 
+            font-weight: 600; 
+            padding: 12px; 
+        }
+        .btn-primary:hover { 
+            background-color: #4f46e5; 
+        }
+        .form-control { 
+            background-color: #0f172a; 
+            border: 1px solid #334155; 
+            color: #ffffff !important; 
+        }
+        .form-control:focus { 
+            background-color: #0f172a; 
+            color: #ffffff !important; 
+            border-color: #6366f1; 
+            box-shadow: none; 
+        }
+        /* YAZI OKUNABİLİRLİĞİ İÇİN TAM BEYAZ (#ffffff) SEÇİLDİ */
+        .result-box { 
+            background-color: #0f172a; 
+            border: 1px solid #334155; 
+            border-radius: 8px; 
+            padding: 20px; 
+            white-space: pre-wrap; 
+            font-size: 0.98rem; 
+            line-height: 1.7; 
+            color: #ffffff !important; 
+            font-weight: 400;
+        }
+        .badge-agent { 
+            background-color: #312e81; 
+            color: #ffffff; 
+            border: 1px solid #4338ca; 
+            font-size: 0.9rem;
+            padding: 8px 14px;
+        }
+        .logo-glow { 
+            filter: drop-shadow(0px 0px 8px rgba(99, 102, 241, 0.6)); 
+        }
     </style>
 </head>
 <body class="py-5">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-10">
+                <!-- Header -->
                 <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
                     <div class="d-flex align-items-center gap-3">
                         <div class="logo-glow">
@@ -58,6 +105,7 @@ HTML_DASHBOARD = """
                     <span class="badge bg-success px-3 py-2">Sistem Canlıda</span>
                 </div>
 
+                <!-- Input Form -->
                 <div class="card p-4 mb-4 shadow">
                     <h5 class="mb-3 text-light">Yeni Görev & Strateji İsteği</h5>
                     <form id="analyzeForm">
@@ -71,27 +119,28 @@ HTML_DASHBOARD = """
                     </form>
                 </div>
 
+                <!-- Results Section -->
                 <div id="resultsContainer" class="d-none">
                     <div class="card p-4 mb-4 shadow">
                         <div class="d-flex align-items-center mb-3">
-                            <span class="badge badge-agent me-2 px-3 py-2">İstihbarat & Strateji Direktörlüğü</span>
+                            <span class="badge badge-agent me-2 rounded-pill">İstihbarat & Strateji Direktörlüğü</span>
                         </div>
                         <div id="stratResult" class="result-box"></div>
                     </div>
 
                     <div class="card p-4 mb-4 shadow">
                         <div class="d-flex align-items-center mb-3">
-                            <span class="badge badge-agent me-2 px-3 py-2">Kreatif & Video Kurgu Yönetmenliği</span>
+                            <span class="badge badge-agent me-2 rounded-pill">Kreatif & Video Kurgu Yönetmenliği</span>
                         </div>
                         <div id="creativeResult" class="result-box"></div>
                     </div>
 
                     <div class="card p-4 shadow">
-                        <h5 class="mb-3 text-light">Üretilen Kapak / Konsept Görseli</h5>
+                        <h5 class="mb-3 text-light">Konsepte Özel Üretilen Görsel</h5>
                         <div class="text-center">
-                            <img id="generatedImg" src="" class="img-fluid rounded border border-secondary mb-3 d-none" style="max-height: 400px;" alt="Üretilen Konsept">
+                            <img id="generatedImg" src="" class="img-fluid rounded border border-secondary mb-3 d-none" style="max-height: 450px; object-fit: cover;" alt="Konsept Görseli">
                             <br>
-                            <a id="imgLink" href="#" target="_blank" class="btn btn-outline-info btn-sm">Görseli Yüksek Çözünürlükte Aç</a>
+                            <a id="imgLink" href="#" target="_blank" class="btn btn-outline-info btn-sm px-4 py-2">Görseli Yüksek Çözünürlükte Aç</a>
                         </div>
                     </div>
                 </div>
@@ -109,7 +158,7 @@ HTML_DASHBOARD = """
             const btnSpinner = document.getElementById('btnSpinner');
             const resultsContainer = document.getElementById('resultsContainer');
 
-            btnText.innerText = "Ajanlar Analiz Yapıyor (Lütfen Bekleyin)...";
+            btnText.innerText = "Ajanlar Analiz ve Görsel Üretiyor...";
             btnSpinner.classList.remove('d-none');
             submitBtn.disabled = true;
 
@@ -177,6 +226,7 @@ def analyze():
 
         llm_model = "gpt-4o-mini"
 
+        # Ajan Tanımları
         strategy_agent = Agent(
             role="İstihbarat ve Strateji Direktörü",
             goal="Verilen konu veya ajans için 2026 odaklı stratejik büyüme planı ve pazar analizi hazırlamak.",
@@ -202,7 +252,7 @@ def analyze():
         )
 
         task_creative = Task(
-            description=f"Stratejiye uygun olarak 1 adet viral Instagram Reels/YouTube Shorts senaryosu yaz (Görsel kurgu, ses ve metin dahil).",
+            description=f"Stratejiye uygun olarak 1 adet viral Instagram Reels/YouTube Shorts senaryosu yaz (Görsel kurgu, ses ve metin dahil). Aynı zamanda üretilecek görsel için İngilizce 1 cümlelik detaylı 'Image Generation Prompt' hazırla.",
             expected_output="Tam video kurgu senaryosu ve içerik planı.",
             agent=creative_agent
         )
@@ -214,13 +264,35 @@ def analyze():
             verbose=False
         )
 
-        crew_output = crew.kickoff()
-        mock_image_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop"
+        crew.kickoff()
+
+        # DİNAMİK VE ANLAMLI GÖRSEL ÜRETİMİ
+        # Öncelik 1: OpenAI DALL-E 3, Eğer bütçe/yetki hatası verirse -> Öncelik 2: Pollinations AI
+        generated_image_url = None
+        
+        try:
+            client = OpenAI(api_key=openai_key)
+            dalle_prompt = f"Professional modern visual concept for Mystic Thread Studio, theme: {user_query}, high resolution 8k, cinematic lighting, futuristic digital studio style"
+            
+            img_res = client.images.generate(
+                model="dall-e-3",
+                prompt=dalle_prompt[:1000],  # Max karakter sınırı
+                n=1,
+                size="1024x1024"
+            )
+            generated_image_url = img_res.data[0].url
+        except Exception as img_err:
+            print(f"[UYARI] DALL-E 3 görseli üretilemedi ({img_err}), Pollinations AI servisine geçiliyor...")
+            
+            # Ücretsiz & Kesintisiz Alternatif (Pollinations Flux/AI Engine)
+            fallback_prompt = f"professional visual concept for {user_query}, modern digital agency, dark background, vivid neon elements, 8k resolution"
+            encoded_prompt = urllib.parse.quote(fallback_prompt)
+            generated_image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1080&nologo=true&seed=2026"
 
         response_data = {
             "intelligence_and_strategy": str(task_strategy.output),
             "creative_and_video_guide": str(task_creative.output),
-            "generated_image_url": mock_image_url
+            "generated_image_url": generated_image_url
         }
 
         return jsonify(response_data), 200
