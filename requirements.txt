@@ -1,8 +1,6 @@
 flask
 gunicorn
-openai
 crewai
-langchain-community
-duckduckgo-search
-ddgs
-tiktoken
+langchain-google-genai
+requests
+reportlab
