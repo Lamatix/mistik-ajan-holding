@@ -8,14 +8,14 @@ app = Flask(__name__)
 # Konfigürasyon ve Güvenlik
 EXPECTED_API_KEY = os.environ.get("X_API_KEY", "mistik-secret-key-2026")
 
-# Web Dashboard HTML Arayüzü
+# Web Dashboard HTML Arayüzü (Logolu)
 HTML_DASHBOARD = """
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mistik Ajan Holding - Komut Merkezi</title>
+    <title>Mystic Thread Studio - Komut Merkezi</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -26,6 +26,7 @@ HTML_DASHBOARD = """
         .form-control:focus { background-color: #0f172a; color: #f8fafc; border-color: #6366f1; box-shadow: none; }
         .result-box { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; }
         .badge-agent { background-color: #312e81; color: #a5b4fc; border: 1px solid #4338ca; }
+        .logo-glow { filter: drop-shadow(0px 0px 8px rgba(99, 102, 241, 0.6)); }
     </style>
 </head>
 <body class="py-5">
@@ -33,9 +34,31 @@ HTML_DASHBOARD = """
         <div class="row justify-content-center">
             <div class="col-lg-10">
                 <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
-                    <div>
-                        <h2 class="fw-bold mb-1" style="color: #818cf8;">MİSTİK AJAN HOLDİNG</h2>
-                        <p class="text-secondary mb-0">Otonom Yapay Zeka Ajansı Kontrol Merkezi | v28.0-Stable</p>
+                    <div class="d-flex align-items-center gap-3">
+                        <!-- Mystic Thread Studio SVG Logo -->
+                        <div class="logo-glow">
+                            <svg width="52" height="52" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="threadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#818cf8" />
+                                        <stop offset="50%" stop-color="#c084fc" />
+                                        <stop offset="100%" stop-color="#38bdf8" />
+                                    </linearGradient>
+                                </defs>
+                                <!-- Dış Mistik Halka / Ağ -->
+                                <circle cx="50" cy="50" r="44" stroke="url(#threadGrad)" stroke-width="2.5" stroke-dasharray="6 4" opacity="0.6" />
+                                <!-- Kıvrımlı İplik (Thread) Formu -->
+                                <path d="M 25 65 C 35 35, 65 35, 75 65 C 65 85, 35 85, 25 65 Z" stroke="url(#threadGrad)" stroke-width="4" fill="none" stroke-linecap="round" />
+                                <path d="M 25 35 C 35 65, 65 65, 75 35 C 65 15, 35 15, 25 35 Z" stroke="url(#threadGrad)" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.8" />
+                                <!-- Mistik Yıldız / Yapay Zeka Çekirdeği -->
+                                <path d="M 50 28 L 53 45 L 70 48 L 53 51 L 50 68 L 47 51 L 30 48 L 47 45 Z" fill="#ffffff" />
+                                <circle cx="50" cy="48" r="3" fill="#818cf8" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="fw-bold mb-0" style="color: #818cf8; letter-spacing: 0.5px;">MYSTIC THREAD STUDIO</h2>
+                            <p class="text-secondary mb-0" style="font-size: 0.9rem;">Otonom Yapay Zeka Ajansı Kontrol Merkezi | v28.0-Stable</p>
+                        </div>
                     </div>
                     <span class="badge bg-success px-3 py-2">Sistem Canlıda</span>
                 </div>
@@ -44,7 +67,7 @@ HTML_DASHBOARD = """
                     <h5 class="mb-3 text-light">Yeni Görev & Strateji İsteği</h5>
                     <form id="analyzeForm">
                         <div class="mb-3">
-                            <textarea id="queryInput" class="form-control" rows="3" placeholder="Örn: Mistik Ajan Holding için 2026 sosyal medya ve büyüme stratejisi oluştur..." required>Mistik Ajan Holding için 2026 sosyal medya ve büyüme stratejisi oluştur.</textarea>
+                            <textarea id="queryInput" class="form-control" rows="3" placeholder="Örn: Mystic Thread Studio için 2026 sosyal medya ve büyüme stratejisi oluştur..." required>Mystic Thread Studio için 2026 sosyal medya ve büyüme stratejisi oluştur.</textarea>
                         </div>
                         <button type="submit" id="submitBtn" class="btn btn-primary w-100">
                             <span id="btnText">Otonom Ajanları Çalıştır</span>
@@ -143,45 +166,39 @@ def home():
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    # Güvenlik Doğrulaması (Dashboard veya API İsteği)
     client_key = request.headers.get("X-API-KEY")
     referer = request.headers.get("Referer")
     
-    # Doğrudan API çağrıları için key kontrolü
     if not referer and client_key != EXPECTED_API_KEY:
         return jsonify({"error": "Unauthorized Access - Invalid X-API-KEY"}), 401
 
     data = request.get_json() or {}
-    user_query = data.get("query", "Mistik Ajan Holding için 2026 büyüme stratejisi oluştur.")
+    user_query = data.get("query", "Mystic Thread Studio için 2026 büyüme stratejisi oluştur.")
 
     try:
-        # LLM Tanımlaması (Gemini Flash - Stabil & Hızlı)
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash",
             google_api_key=os.environ.get("GEMINI_API_KEY")
         )
 
-        # 1. Ajan: İstihbarat ve Strateji Direktörü
         strategy_agent = Agent(
             role="İstihbarat ve Strateji Direktörü",
             goal="Verilen konu veya ajans için 2026 odaklı stratejik büyüme planı ve pazar analizi hazırlamak.",
-            backstory="Sen Mistik Ajan Holding'in en kıdemli stratejistisin. Verileri analiz eder, trendleri yakalar ve en etkili büyüme adımlarını belirlersin.",
+            backstory="Sen Mystic Thread Studio'nun en kıdemli stratejistisin. Verileri analiz eder, trendleri yakalar ve en etkili büyüme adımlarını belirlersin.",
             verbose=False,
             allow_delegation=False,
             llm=llm
         )
 
-        # 2. Ajan: Kreatif ve Video Kurgu Yönetmeni
         creative_agent = Agent(
             role="Kreatif ve Video Kurgu Yönetmeni",
             goal="Strateji doğrultusunda yüksek etkileşimli sosyal medya senaryoları, Reels/Shorts konseptleri üretmek.",
-            backstory="Sen Mistik Ajan Holding'in kreatif dahi direktörüsün. İzleyiciyi ilk 3 saniyede yakalayan viral video senaryoları ve görsel konseptler tasarlarsın.",
+            backstory="Sen Mystic Thread Studio'nun kreatif dahi direktörüsün. İzleyiciyi ilk 3 saniyede yakalayan viral video senaryoları ve görsel konseptler tasarlarsın.",
             verbose=False,
             allow_delegation=False,
             llm=llm
         )
 
-        # Görevler
         task_strategy = Task(
             description=f"Konu: '{user_query}'. Bu konu için 3 maddelik net ve uygulanabilir 2026 büyüme ve içerik stratejisi hazırla.",
             expected_output="3 maddelik detaylı ve profesyonel strateji analizi.",
@@ -194,7 +211,6 @@ def analyze():
             agent=creative_agent
         )
 
-        # Ekip (Crew) Çalıştırma
         crew = Crew(
             agents=[strategy_agent, creative_agent],
             tasks=[task_strategy, task_creative],
@@ -203,11 +219,8 @@ def analyze():
         )
 
         crew_output = crew.kickoff()
-
-        # Varsayılan konsept görsel bağlantısı
         mock_image_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop"
 
-        # Yanıt Paketleme
         response_data = {
             "intelligence_and_strategy": str(task_strategy.output),
             "creative_and_video_guide": str(task_creative.output),
