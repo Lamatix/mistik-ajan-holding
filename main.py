@@ -8,7 +8,7 @@ app = Flask(__name__)
 # Konfigürasyon ve Güvenlik
 EXPECTED_API_KEY = os.environ.get("X_API_KEY", "mistik-secret-key-2026")
 
-# Web Dashboard HTML Arayüzü (Logolu)
+# Web Dashboard HTML Arayüzü (Logolu & Mystic Thread Studio Markalı)
 HTML_DASHBOARD = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -45,12 +45,9 @@ HTML_DASHBOARD = """
                                         <stop offset="100%" stop-color="#38bdf8" />
                                     </linearGradient>
                                 </defs>
-                                <!-- Dış Mistik Halka / Ağ -->
                                 <circle cx="50" cy="50" r="44" stroke="url(#threadGrad)" stroke-width="2.5" stroke-dasharray="6 4" opacity="0.6" />
-                                <!-- Kıvrımlı İplik (Thread) Formu -->
                                 <path d="M 25 65 C 35 35, 65 35, 75 65 C 65 85, 35 85, 25 65 Z" stroke="url(#threadGrad)" stroke-width="4" fill="none" stroke-linecap="round" />
                                 <path d="M 25 35 C 35 65, 65 65, 75 35 C 65 15, 35 15, 25 35 Z" stroke="url(#threadGrad)" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.8" />
-                                <!-- Mistik Yıldız / Yapay Zeka Çekirdeği -->
                                 <path d="M 50 28 L 53 45 L 70 48 L 53 51 L 50 68 L 47 51 L 30 48 L 47 45 Z" fill="#ffffff" />
                                 <circle cx="50" cy="48" r="3" fill="#818cf8" />
                             </svg>
