@@ -1,9 +1,12 @@
 import os
 from flask import Flask, request, jsonify, render_template_string
+from crewai import Agent, Task, Crew, Process
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 app = Flask(__name__)
 
-API_KEY = os.environ.get("X_API_KEY", "mistik-secret-key-2026")
+# Konfigürasyon ve Güvenlik
+EXPECTED_API_KEY = os.environ.get("X_API_KEY", "mistik-secret-key-2026")
 
 # Web Dashboard HTML Arayüzü
 HTML_DASHBOARD = """
@@ -118,7 +121,8 @@ HTML_DASHBOARD = """
                     resultsContainer.classList.remove('d-none');
                     resultsContainer.scrollIntoView({ behavior: 'smooth' });
                 } else {
-                    alert("Hata Oluştu: " + response.statusText);
+                    const errData = await response.json();
+                    alert("Hata Oluştu (" + response.status + "): " + (errData.error || response.statusText));
                 }
             } catch (err) {
                 alert("İstek Hatası: " + err.message);
@@ -137,4 +141,84 @@ HTML_DASHBOARD = """
 def home():
     return render_template_string(HTML_DASHBOARD)
 
-# Mevcut /analyze endpoint kodlarınızın devamı buradadır...
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    # Güvenlik Doğrulaması (Dashboard veya API İsteği)
+    client_key = request.headers.get("X-API-KEY")
+    referer = request.headers.get("Referer")
+    
+    # Doğrudan API çağrıları için key kontrolü
+    if not referer and client_key != EXPECTED_API_KEY:
+        return jsonify({"error": "Unauthorized Access - Invalid X-API-KEY"}), 401
+
+    data = request.get_json() or {}
+    user_query = data.get("query", "Mistik Ajan Holding için 2026 büyüme stratejisi oluştur.")
+
+    try:
+        # LLM Tanımlaması (Gemini Flash - Stabil & Hızlı)
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
+            google_api_key=os.environ.get("GEMINI_API_KEY")
+        )
+
+        # 1. Ajan: İstihbarat ve Strateji Direktörü
+        strategy_agent = Agent(
+            role="İstihbarat ve Strateji Direktörü",
+            goal="Verilen konu veya ajans için 2026 odaklı stratejik büyüme planı ve pazar analizi hazırlamak.",
+            backstory="Sen Mistik Ajan Holding'in en kıdemli stratejistisin. Verileri analiz eder, trendleri yakalar ve en etkili büyüme adımlarını belirlersin.",
+            verbose=False,
+            allow_delegation=False,
+            llm=llm
+        )
+
+        # 2. Ajan: Kreatif ve Video Kurgu Yönetmeni
+        creative_agent = Agent(
+            role="Kreatif ve Video Kurgu Yönetmeni",
+            goal="Strateji doğrultusunda yüksek etkileşimli sosyal medya senaryoları, Reels/Shorts konseptleri üretmek.",
+            backstory="Sen Mistik Ajan Holding'in kreatif dahi direktörüsün. İzleyiciyi ilk 3 saniyede yakalayan viral video senaryoları ve görsel konseptler tasarlarsın.",
+            verbose=False,
+            allow_delegation=False,
+            llm=llm
+        )
+
+        # Görevler
+        task_strategy = Task(
+            description=f"Konu: '{user_query}'. Bu konu için 3 maddelik net ve uygulanabilir 2026 büyüme ve içerik stratejisi hazırla.",
+            expected_output="3 maddelik detaylı ve profesyonel strateji analizi.",
+            agent=strategy_agent
+        )
+
+        task_creative = Task(
+            description=f"Stratejiye uygun olarak 1 adet viral Instagram Reels/YouTube Shorts senaryosu yaz (Görsel kurgu, ses ve metin dahil).",
+            expected_output="Tam video kurgu senaryosu ve içerik planı.",
+            agent=creative_agent
+        )
+
+        # Ekip (Crew) Çalıştırma
+        crew = Crew(
+            agents=[strategy_agent, creative_agent],
+            tasks=[task_strategy, task_creative],
+            process=Process.sequential,
+            verbose=False
+        )
+
+        crew_output = crew.kickoff()
+
+        # Varsayılan konsept görsel bağlantısı
+        mock_image_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop"
+
+        # Yanıt Paketleme
+        response_data = {
+            "intelligence_and_strategy": str(task_strategy.output),
+            "creative_and_video_guide": str(task_creative.output),
+            "generated_image_url": mock_image_url
+        }
+
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
