@@ -1,132 +1,140 @@
-import json
 import os
-import urllib.parse
-from functools import wraps
-from flask import Flask, Response, request, jsonify
-from crewai import Agent, Crew, Process, Task, LLM
-from openai import OpenAI
+from flask import Flask, request, jsonify, render_template_string
 
 app = Flask(__name__)
 
-API_KEY = os.environ.get("HOLDING_API_KEY", "mistik-secret-key-2026")
+API_KEY = os.environ.get("X_API_KEY", "mistik-secret-key-2026")
 
-def require_api_key(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if os.environ.get("HOLDING_API_KEY"):
-            user_key = request.headers.get("X-API-KEY") or request.args.get("api_key")
-            if user_key != API_KEY:
-                return jsonify({"error": "Yetkisiz Erişim. Geçersiz X-API-KEY."}), 401
-        return f(*args, **kwargs)
-    return decorated
+# Web Dashboard HTML Arayüzü
+HTML_DASHBOARD = """
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mistik Ajan Holding - Komut Merkezi</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; }
+        .btn-primary { background-color: #6366f1; border: none; font-weight: 600; padding: 12px; }
+        .btn-primary:hover { background-color: #4f46e5; }
+        .form-control { background-color: #0f172a; border: 1px solid #334155; color: #f8fafc; }
+        .form-control:focus { background-color: #0f172a; color: #f8fafc; border-color: #6366f1; box-shadow: none; }
+        .result-box { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; }
+        .badge-agent { background-color: #312e81; color: #a5b4fc; border: 1px solid #4338ca; }
+    </style>
+</head>
+<body class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
+                    <div>
+                        <h2 class="fw-bold mb-1" style="color: #818cf8;">MİSTİK AJAN HOLDİNG</h2>
+                        <p class="text-secondary mb-0">Otonom Yapay Zeka Ajansı Kontrol Merkezi | v28.0-Stable</p>
+                    </div>
+                    <span class="badge bg-success px-3 py-2">Sistem Canlıda</span>
+                </div>
 
-def create_dalle_image(prompt_text, api_key):
-    if api_key:
-        try:
-            client = OpenAI(api_key=api_key)
-            response = client.images.generate(
-                model="dall-e-3",
-                prompt=f"Luxury, esoteric high-end artwork: {prompt_text[:200]}",
-                size="1024x1024",
-                quality="hd",
-                n=1,
-            )
-            if response and hasattr(response, 'data') and len(response.data) > 0:
-                return response.data[0].url
-        except Exception:
-            pass
+                <div class="card p-4 mb-4 shadow">
+                    <h5 class="mb-3 text-light">Yeni Görev & Strateji İsteği</h5>
+                    <form id="analyzeForm">
+                        <div class="mb-3">
+                            <textarea id="queryInput" class="form-control" rows="3" placeholder="Örn: Mistik Ajan Holding için 2026 sosyal medya ve büyüme stratejisi oluştur..." required>Mistik Ajan Holding için 2026 sosyal medya ve büyüme stratejisi oluştur.</textarea>
+                        </div>
+                        <button type="submit" id="submitBtn" class="btn btn-primary w-100">
+                            <span id="btnText">Otonom Ajanları Çalıştır</span>
+                            <span id="btnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                        </button>
+                    </form>
+                </div>
 
-    clean_prompt = urllib.parse.quote(f"Luxury esoteric mystic artwork, {prompt_text[:200]}")
-    return f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&nologo=true"
+                <div id="resultsContainer" class="d-none">
+                    <div class="card p-4 mb-4 shadow">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge badge-agent me-2 px-3 py-2">İstihbarat & Strateji Direktörlüğü</span>
+                        </div>
+                        <div id="stratResult" class="result-box text-slate-200"></div>
+                    </div>
+
+                    <div class="card p-4 mb-4 shadow">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge badge-agent me-2 px-3 py-2">Kreatif & Video Kurgu Yönetmenliği</span>
+                        </div>
+                        <div id="creativeResult" class="result-box text-slate-200"></div>
+                    </div>
+
+                    <div class="card p-4 shadow">
+                        <h5 class="mb-3 text-light">Üretilen Kapak / Konsept Görseli</h5>
+                        <div class="text-center">
+                            <img id="generatedImg" src="" class="img-fluid rounded border border-secondary mb-3 d-none" style="max-height: 400px;" alt="Üretilen Konsept">
+                            <br>
+                            <a id="imgLink" href="#" target="_blank" class="btn btn-outline-info btn-sm">Görseli Yüksek Çözünürlükte Aç</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('analyzeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const query = document.getElementById('queryInput').value;
+            const submitBtn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+            const resultsContainer = document.getElementById('resultsContainer');
+
+            btnText.innerText = "Ajanlar Analiz Yapıyor (Lütfen Bekleyin)...";
+            btnSpinner.classList.remove('d-none');
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-KEY': 'mistik-secret-key-2026'
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    document.getElementById('stratResult').innerText = data.intelligence_and_strategy || "İçerik üretilemedi.";
+                    document.getElementById('creativeResult').innerText = data.creative_and_video_guide || "İçerik üretilemedi.";
+                    
+                    if (data.generated_image_url) {
+                        const imgElem = document.getElementById('generatedImg');
+                        imgElem.src = data.generated_image_url;
+                        imgElem.classList.remove('d-none');
+                        document.getElementById('imgLink').href = data.generated_image_url;
+                    }
+
+                    resultsContainer.classList.remove('d-none');
+                    resultsContainer.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert("Hata Oluştu: " + response.statusText);
+                }
+            } catch (err) {
+                alert("İstek Hatası: " + err.message);
+            } finally {
+                btnText.innerText = "Otonom Ajanları Çalıştır";
+                btnSpinner.classList.add('d-none');
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
+"""
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({
-        "status": "Mistik Ajan Holding Canlıda!", 
-        "version": "28.0-StableAgencyEngine"
-    })
+    return render_template_string(HTML_DASHBOARD)
 
-@app.route("/analyze", methods=["POST"])
-@require_api_key
-def analyze():
-    data = request.get_json() or {}
-    user_query = data.get("query", "Mistik Ajan Holding için 2026 sosyal medya ve büyüme stratejisi oluştur.")
-    
-    openai_key = os.environ.get("OPENAI_API_KEY")
-
-    try:
-        llm = LLM(
-            model="gpt-4o-mini",
-            api_key=openai_key
-        )
-
-        # RAM dostu 2 ana uzman birim
-        intelligence_lead = Agent(
-            role="Trend, Rakip ve Strateji Direktörü",
-            goal="Sektörel trendleri, rakip boşluklarını ve Mistik Ajan Holding için ana büyüme stratejisini çıkarmak.",
-            backstory="Pazar istihbaratı ve stratejik kararlardan sorumlu lider ajan.",
-            verbose=False,
-            allow_delegation=False,
-            llm=llm
-        )
-
-        production_lead = Agent(
-            role="Kreatif ve Video Kurgu Yönetmeni",
-            goal="Stratejiye uygun viral Reels senaryosu, kurgu rehberi ve İngilizce görsel prompt yazmak.",
-            backstory="Içerik kurgusu ve görsel direktörlükten sorumlu kreatif lider.",
-            verbose=False,
-            allow_delegation=False,
-            llm=llm
-        )
-
-        task1 = Task(
-            description=f"Şu konuyu trendler, rakip fırsatları ve holding stratejisi açısından analiz et: {user_query}. Çıktıyı 3 ayrı başlıkta sun: 1- Trendler, 2- Rakip Analizi, 3- Ana Strateji.",
-            expected_output="Trend, Rakip ve Strateji Raporu.",
-            agent=intelligence_lead
-        )
-
-        task2 = Task(
-            description="Stratejiye uygun viral kanca odaklı Reels senaryosu, saniye saniye kurgu/geçiş rehberi ve en sona 1 cümlelik İNGİLİZCE görsel prompt ekle.",
-            expected_output="Reels Senaryosu, Kurgu Rehberi ve İngilizce Görsel Prompt.",
-            agent=production_lead
-        )
-
-        holding_crew = Crew(
-            agents=[intelligence_lead, production_lead],
-            tasks=[task1, task2],
-            process=Process.sequential,
-            verbose=False
-        )
-
-        holding_crew.kickoff()
-
-        image_prompt = str(task2.output) if hasattr(task2, 'output') and task2.output else user_query
-        generated_image_url = create_dalle_image(image_prompt, openai_key)
-
-        response_payload = {
-            "status": "success",
-            "intelligence_and_strategy": str(task1.output),
-            "creative_and_video_guide": str(task2.output),
-            "generated_image_url": generated_image_url
-        }
-
-        return Response(
-            json.dumps(response_payload, ensure_ascii=False),
-            status=200,
-            mimetype="application/json",
-            headers={"Content-Type": "application/json; charset=utf-8"}
-        )
-
-    except Exception as e:
-        error_payload = {
-            "status": "error",
-            "message": f"İşlem Hatası: {str(e)}"
-        }
-        return Response(
-            json.dumps(error_payload, ensure_ascii=False),
-            status=500,
-            mimetype="application/json"
-        )
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+# Mevcut /analyze endpoint kodlarınızın devamı buradadır...
