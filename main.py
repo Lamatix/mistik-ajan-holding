@@ -8,7 +8,7 @@ app = Flask(__name__)
 # Konfigürasyon ve Güvenlik
 EXPECTED_API_KEY = os.environ.get("X_API_KEY", "mistik-secret-key-2026")
 
-# Web Dashboard HTML Arayüzü (Logolu & Mystic Thread Studio Markalı)
+# Web Dashboard HTML Arayüzü (Mystic Thread Studio Markalı)
 HTML_DASHBOARD = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -35,7 +35,6 @@ HTML_DASHBOARD = """
             <div class="col-lg-10">
                 <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
                     <div class="d-flex align-items-center gap-3">
-                        <!-- Mystic Thread Studio SVG Logo -->
                         <div class="logo-glow">
                             <svg width="52" height="52" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <defs>
@@ -173,9 +172,15 @@ def analyze():
     user_query = data.get("query", "Mystic Thread Studio için 2026 büyüme stratejisi oluştur.")
 
     try:
+        # GEMINI_API_KEY veya GOOGLE_API_KEY değişkenini dinamik oku ve doğrudan sağla
+        gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not gemini_key:
+            return jsonify({"error": "GEMINI_API_KEY environment variable is missing on Render."}), 500
+
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash",
-            google_api_key=os.environ.get("GEMINI_API_KEY")
+            api_key=gemini_key,
+            google_api_key=gemini_key
         )
 
         strategy_agent = Agent(
