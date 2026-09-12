@@ -1,7 +1,6 @@
 import os
 from flask import Flask, request, jsonify, render_template_string
 from crewai import Agent, Task, Crew, Process
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 app = Flask(__name__)
 
@@ -176,11 +175,11 @@ def analyze():
         if not gemini_key:
             return jsonify({"error": "GEMINI_API_KEY environment variable is missing on Render."}), 500
 
-        # CrewAI ve LiteLLM için GEMINI_API_KEY ortama garanti edilsin
+        # Ortam değişkenlerini CrewAI/LiteLLM için tanımla
         os.environ["GEMINI_API_KEY"] = gemini_key
 
-        # CrewAI native Gemini string formatı
-        llm_model = "gemini/gemini-1.5-flash"
+        # Google API v1 ile tam uyumlu resmi Gemini model ismi
+        llm_model = "gemini/gemini-1.5-flash-latest"
 
         strategy_agent = Agent(
             role="İstihbarat ve Strateji Direktörü",
