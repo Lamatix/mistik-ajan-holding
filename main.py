@@ -35,13 +35,13 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-# Timeout süresi 5 saniyeye yükseltildi
+# Timeout süresi 5 saniyeye ayarlandı
 geolocator = Nominatim(user_agent="mystic_thread_studio_enterprise_v10", timeout=5)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 SIGNS = ["Koç", "Boğa", "İkizler", "Yengeç", "Aslan", "Başak", "Terazi", "Akrep", "Yay", "Oğlak", "Kova", "Balık"]
 
-# Dış API çökerse kullanılacak yerel şehir koordinatları
+# Dış API çökerse kullanılacak yedek şehir koordinatları
 TURKEY_CITIES_COORDS = {
     "ADANA": (37.0000, 35.3213), "ADIYAMAN": (37.7648, 38.2786), "AFYONKARAHİSAR": (38.7507, 30.5567),
     "AĞRI": (39.7191, 43.0503), "AMASYA": (40.6499, 35.8353), "ANKARA": (39.9334, 32.8597),
@@ -116,22 +116,20 @@ def astro_agent(req: AgentRequest) -> str:
     lat, lng = None, None
     location_query = f"{req.district + ', ' if req.district else ''}{req.city}, {req.country}"
     
-    # 1. Aşama: Nominatim API denemesi (Try/Except korumalı)
     try:
         if req.city and req.country:
             loc = geolocator.geocode(location_query)
             if loc:
                 lat, lng = loc.latitude, loc.longitude
     except Exception:
-        pass # Zaman aşımlarında uygulamayı düşürmez
+        pass
 
-    # 2. Aşama: Fallback (Sözlükten koordinat bulma)
     if lat is None or lng is None:
-        city_key = (req.city or "").strip().upper().replace("I", "İ").replace("İZMİR", "İZMİR")
+        city_key = (req.city or "").strip().upper().replace("I", "İ")
         if city_key in TURKEY_CITIES_COORDS:
             lat, lng = TURKEY_CITIES_COORDS[city_key]
         else:
-            lat, lng = 41.0082, 28.9784  # Varsayılan İstanbul koordinatı
+            lat, lng = 41.0082, 28.9784
 
     parts = [int(p) for p in re.sub(r"[^\d]", " ", req.birth_date).split() if p.isdigit()]
     day, month, year = (parts[0], parts[1], parts[2]) if len(parts) == 3 else (15, 5, 1995)
@@ -239,18 +237,12 @@ def ceo_agent_orchestrator(req: AgentRequest) -> str:
 @limiter.limit("20/minute")
 async def process_agent_request(request: Request, req: AgentRequest):
     try:
-        if req.agent_type == "ceo":
-            analysis = ceo_agent_orchestrator(req)
-        elif req.agent_type == "astro":
-            analysis = astro_agent(req)
-        elif req.agent_type == "tarot":
-            analysis = tarot_agent(req)
-        elif req.agent_type == "numerology":
-            analysis = numerology_agent(req)
-        elif req.agent_type == "dream":
-            analysis = dream_agent(req)
-        else:
-            analysis = ceo_agent_orchestrator(req)
+        if req.agent_type == "ceo": analysis = ceo_agent_orchestrator(req)
+        elif req.agent_type == "astro": analysis = astro_agent(req)
+        elif req.agent_type == "tarot": analysis = tarot_agent(req)
+        elif req.agent_type == "numerology": analysis = numerology_agent(req)
+        elif req.agent_type == "dream": analysis = dream_agent(req)
+        else: analysis = ceo_agent_orchestrator(req)
 
         return {"status": "success", "analysis": analysis}
     except Exception as e:
@@ -477,14 +469,17 @@ async def read_root():
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Doğum Şehri</label>
-                            <input type="text" id="cityInput" class="form-control" list="citiesList" placeholder="Şehir seçin veya yazın..." required>
+                            <input type="text" id="cityInput" class="form-control" list="citiesList" placeholder="Şehir seçin veya yazın..." oninput="updateDistrictOptions()" required>
                             <datalist id="citiesList">
                                 <option value="Adana"><option value="Adıyaman"><option value="Afyonkarahisar"><option value="Ağrı"><option value="Amasya"><option value="Ankara"><option value="Antalya"><option value="Artvin"><option value="Aydın"><option value="Balıkesir"><option value="Bilecik"><option value="Bingöl"><option value="Bitlis"><option value="Bolu"><option value="Burdur"><option value="Bursa"><option value="Çanakkale"><option value="Çankırı"><option value="Çorum"><option value="Denizli"><option value="Diyarbakır"><option value="Edirne"><option value="Elazığ"><option value="Erzincan"><option value="Erzurum"><option value="Eskişehir"><option value="Gaziantep"><option value="Giresun"><option value="Gümüşhane"><option value="Hakkari"><option value="Hatay"><option value="Isparta"><option value="Mersin"><option value="İstanbul"><option value="İzmir"><option value="Kars"><option value="Kastamonu"><option value="Kayseri"><option value="Kırklareli"><option value="Kırşehir"><option value="Kocaeli"><option value="Konya"><option value="Kütahya"><option value="Malatya"><option value="Manisa"><option value="Kahramanmaraş"><option value="Mardin"><option value="Muğla"><option value="Muş"><option value="Nevşehir"><option value="Niğde"><option value="Ordu"><option value="Rize"><option value="Sakarya"><option value="Samsun"><option value="Siirt"><option value="Sinop"><option value="Sivas"><option value="Tekirdağ"><option value="Tokat"><option value="Trabzon"><option value="Tunceli"><option value="Şanlıurfa"><option value="Uşak"><option value="Van"><option value="Yozgat"><option value="Zonguldak"><option value="Aksaray"><option value="Bayburt"><option value="Karaman"><option value="Kırıkkale"><option value="Batman"><option value="Şırnak"><option value="Bartın"><option value="Ardahan"><option value="Iğdır"><option value="Yalova"><option value="Karabük"><option value="Kilis"><option value="Osmaniye"><option value="Düzce">
                             </datalist>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Doğum İlçesi</label>
-                            <input type="text" id="districtInput" class="form-control" placeholder="Örn: Kadıköy, Çankaya, Karşıyaka">
+                            <label class="form-label">Doğum İlçe Seçimi</label>
+                            <input type="text" id="districtInput" class="form-control" list="districtsList" placeholder="İlçe seçin veya yazın...">
+                            <datalist id="districtsList">
+                                <!-- JS dinamik doldurur -->
+                            </datalist>
                         </div>
                     </div>
 
@@ -520,6 +515,28 @@ async def read_root():
         </div>
 
         <script>
+        const TURKEY_DISTRICTS = {
+            "İZMİR": ["Konak", "Karşıyaka", "Bornova", "Buca", "Çiğli", "Gaziemir", "Balçova", "Narlıdere", "Bayraklı", "Urla", "Çeşme", "Torbalı", "Menemen", "Aliağa", "Bergama", "Ödemiş", "Tire", "Seferihisar", "Foça", "Dikili", "Kınık", "Kiraz", "Menderes", "Beydağ", "Selçuk"],
+            "İSTANBUL": ["Kadıköy", "Beşiktaş", "Şişli", "Üsküdar", "Bakırköy", "Beyoğlu", "Maltepe", "Ataşehir", "Pendik", "Sarıyer", "Fatih", "Ümraniye", "Küçükçekmece", "Büyükçekmece", "Beylikdüzü", "Avcılar", "Kartal", "Zeytinburnu", "Eyüpsultan", "Kağıthane", "Şile", "Tuzla"],
+            "ANKARA": ["Çankaya", "Keçiören", "Yenimahalle", "Mamak", "Etimesgut", "Sincan", "Gölbaşı", "Altındağ", "Pursaklar", "Polatlı", "Akyurt", "Elmadağ", "Kahramankazan", "Çubuk"],
+            "BURSA": ["Nilüfer", "Osmangazi", "Yıldırım", "Mudanya", "Gemlik", "İnegöl", "Gürsu", "Kestel", "Karacabey", "Mustafakemalpaşa"],
+            "ANTALYA": ["Muratpaşa", "Konyaaltı", "Kepez", "Alanya", "Manavgat", "Serik", "Kemer", "Kaş", "Kumluca", "Gazipaşa", "Finike"]
+        };
+
+        function updateDistrictOptions() {
+            const cityVal = document.getElementById('cityInput').value.trim().toUpperCase().replace(/i/g, 'İ');
+            const districtsList = document.getElementById('districtsList');
+            districtsList.innerHTML = '';
+
+            if (TURKEY_DISTRICTS[cityVal]) {
+                TURKEY_DISTRICTS[cityVal].forEach(d => {
+                    const option = document.createElement('option');
+                    option.value = d;
+                    districtsList.appendChild(option);
+                });
+            }
+        }
+
         function formatDate(input) {
             let v = input.value.replace(/\D/g, '');
             if (v.length > 8) v = v.substring(0, 8);
