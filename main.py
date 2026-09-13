@@ -7,13 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import swisseph as swe
 from geopy.geocoders import Nominatim
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.1-SECURE")
+app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.3-AI")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -40,7 +41,14 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-geolocator = Nominatim(user_agent="mystic_thread_studio_v3_1")
+geolocator = Nominatim(user_agent="mystic_thread_studio_v3_3")
+
+# Gemini Model Entegrasyonu (Sistem Environment Variable'dan GEMINI_API_KEY okur)
+llm = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash",
+    temperature=0.7,
+    google_api_key=os.getenv("GEMINI_API_KEY", "")
+)
 
 class AstroRequest(BaseModel):
     name: Optional[str] = Field("Danışan", max_length=100)
@@ -79,37 +87,64 @@ async def analyze_astro(request: Request, req: AstroRequest):
         date_parts = req.birth_date.replace("/", ".").replace("-", ".").split(".")
         day, month, year = int(date_parts[0]), int(date_parts[1]), int(date_parts[2])
 
-        time_parts = req.birth_time.split(":")
+        clean_time = req.birth_time.replace(".", ":")
+        time_parts = clean_time.split(":")
         hour, minute = int(time_parts[0]), int(time_parts[1])
 
         utc_hour = hour - 3 + (minute / 60.0)
         julian_day = swe.julday(year, month, day, utc_hour)
 
         planets = {
-            "Güneş / Sun": round(swe.calc_ut(julian_day, swe.SUN)[0][0], 2),
-            "Ay / Moon": round(swe.calc_ut(julian_day, swe.MOON)[0][0], 2),
-            "Merkür / Mercury": round(swe.calc_ut(julian_day, swe.MERCURY)[0][0], 2),
-            "Venüs / Venus": round(swe.calc_ut(julian_day, swe.VENUS)[0][0], 2),
-            "Mars / Mars": round(swe.calc_ut(julian_day, swe.MARS)[0][0], 2),
-            "Jüpiter / Jupiter": round(swe.calc_ut(julian_day, swe.JUPITER)[0][0], 2),
-            "Satürn / Saturn": round(swe.calc_ut(julian_day, swe.SATURN)[0][0], 2),
-            "Uranüs / Uranus": round(swe.calc_ut(julian_day, swe.URANUS)[0][0], 2),
-            "Neptün / Neptune": round(swe.calc_ut(julian_day, swe.NEPTUNE)[0][0], 2),
-            "Plüton / Pluto": round(swe.calc_ut(julian_day, swe.PLUTO)[0][0], 2),
+            "Güneş": round(swe.calc_ut(julian_day, swe.SUN)[0][0], 2),
+            "Ay": round(swe.calc_ut(julian_day, swe.MOON)[0][0], 2),
+            "Merkür": round(swe.calc_ut(julian_day, swe.MERCURY)[0][0], 2),
+            "Venüs": round(swe.calc_ut(julian_day, swe.VENUS)[0][0], 2),
+            "Mars": round(swe.calc_ut(julian_day, swe.MARS)[0][0], 2),
+            "Jüpiter": round(swe.calc_ut(julian_day, swe.JUPITER)[0][0], 2),
+            "Satürn": round(swe.calc_ut(julian_day, swe.SATURN)[0][0], 2),
+            "Uranüs": round(swe.calc_ut(julian_day, swe.URANUS)[0][0], 2),
+            "Neptün": round(swe.calc_ut(julian_day, swe.NEPTUNE)[0][0], 2),
+            "Plüton": round(swe.calc_ut(julian_day, swe.PLUTO)[0][0], 2),
         }
 
         houses, ascmc = swe.houses(julian_day, lat, lng, b'P')
         ascendant_degree = round(ascmc[0], 2)
 
-        zodiac_signs = ["Koç / Aries", "Boğa / Taurus", "İkizler / Gemini", "Yengeç / Cancer", 
-                        "Aslan / Leo", "Başak / Virgo", "Terazi / Libra", "Akrep / Scorpio", 
-                        "Yay / Sagittarius", "Oğlak / Capricorn", "Kova / Aquarius", "Balık / Pisces"]
+        zodiac_signs = ["Koç", "Boğa", "İkizler", "Yengeç", "Aslan", "Başak", 
+                        "Terazi", "Akrep", "Yay", "Oğlak", "Kova", "Balık"]
         asc_sign = zodiac_signs[int(ascendant_degree // 30)]
 
         clean_name = req.name.replace("<", "&lt;").replace(">", "&gt;")
         clean_question = req.question.replace("<", "&lt;").replace(">", "&gt;")
 
-        analysis_text = f"""
+        # Yapay Zeka İstemi (Prompting)
+        prompt = f"""
+        Sen profesyonel, sezgisel ve uzman bir astrolog ve mistik danışmansın.
+        Aşağıdaki Swiss Ephemeris doğum haritası verilerini incele ve danışanın sorusunu detaylıca analiz et.
+
+        DİL REQUIREMENT: Yanıtını tamamen {req.lang} dilinde ver.
+
+        DANIŞAN BİLGİLERİ:
+        - İsim: {clean_name}
+        - Yükselen Burç: {ascendant_degree}° {asc_sign}
+        - Gezegen Konumları (Derece): {json.dumps(planets, ensure_ascii=False)}
+        - Danışanın Sorduğu Soru / Odak Alanı: "{clean_question}"
+
+        YAZIM FORMATI:
+        1. "Genel Harita & Potansiyel Özeti": Danışanın yükselen burcu ve genel karakter dinamiklerine kısa bir bakış.
+        2. "Astrolojik Detay ve Sorunun Analizi": Gezegenlerin konumları doğrultusunda danışanın sorusuna derinlemesine yanıt.
+        3. "Mistik Öneri & Tavsiye": Önümüzdeki dönem için somut tavsiyeler.
+
+        Lütfen HTML formatında (<h3>, <p>, <ul>, <li>, <strong> etiketlerini kullanarak) estetik ve okunaklı biçimde yanıt üret.
+        """
+
+        try:
+            ai_response = llm.invoke(prompt)
+            ai_commentary = ai_response.content
+        except Exception as ai_err:
+            ai_commentary = f"<p class='text-warning'>Yapay zeka yorumu oluşturulamadı: {str(ai_err)}. Lütfen GEMINI_API_KEY anahtarınızı Render ortam değişkenlerinde kontrol edin.</p>"
+
+        analysis_html = f"""
         <h3>Harita Analizi ({clean_name})</h3>
         <p><strong>Yükselen / Ascendant:</strong> {ascendant_degree}° {asc_sign}</p>
         <p><strong>Konum / Location:</strong> {req.district} / {req.city} ({req.country}) - Enlem: {lat}, Boylam: {lng}</p>
@@ -119,7 +154,9 @@ async def analyze_astro(request: Request, req: AstroRequest):
             {"".join([f"<li><strong>{planet}:</strong> {deg}°</li>" for planet, deg in planets.items()])}
         </ul>
         <hr>
-        <p><strong>Analiz / Analysis:</strong> "{clean_question}"</p>
+        <div class="ai-interpretation mt-3">
+            {ai_commentary}
+        </div>
         """
 
         return {
@@ -128,13 +165,18 @@ async def analyze_astro(request: Request, req: AstroRequest):
             "ascendant": f"{ascendant_degree}° {asc_sign}",
             "coordinates": {"lat": lat, "lng": lng},
             "planets": planets,
-            "analysis": analysis_text
+            "analysis": analysis_html
         }
 
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tarih veya Saat formatı hatalı. Örn: 15.05.1995 ve 14:30 giriniz."
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Hesaplama sırasında güvenlik / sistem hatası oluştu."
+            detail=f"Hesaplama hatası: {str(e)}"
         )
 
 
@@ -156,7 +198,6 @@ async def read_root():
             .btn-primary { background-color: #6366f1; border: none; font-weight: 600; padding: 12px; }
             .btn-primary:hover { background-color: #4f46e5; }
             
-            /* Dynamic Dropdown Style */
             .autocomplete-wrapper { position: relative; }
             .autocomplete-results {
                 position: absolute;
@@ -194,17 +235,10 @@ async def read_root():
                 <select id="langSelect" class="form-select form-select-sm" onchange="changeLanguage()">
                     <option value="tr" selected>Türkçe</option>
                     <option value="en">English</option>
-                    <option value="zh">中文 (Chinese)</option>
-                    <option value="hi">हिन्दी (Hindi)</option>
-                    <option value="es">Español</option>
-                    <option value="fr">Français</option>
-                    <option value="ar">العربية (Arabic)</option>
-                    <option value="bn">বাংলা (Bengali)</option>
-                    <option value="pt">Português</option>
-                    <option value="ru">Русский</option>
-                    <option value="ur">اردو (Urdu)</option>
                     <option value="de">Deutsch</option>
                     <option value="it">Italiano</option>
+                    <option value="es">Español</option>
+                    <option value="fr">Français</option>
                 </select>
                 <span class="badge bg-success px-3 py-2">SECURE ONLINE</span>
             </div>
@@ -225,7 +259,7 @@ async def read_root():
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="form-label" id="lblTime">Doğum Saati</label>
-                        <input type="text" id="astroTimeInput" class="form-control" value="14:30" required>
+                        <input type="text" id="astroTimeInput" class="form-control" value="14:30" placeholder="HH:MM" required>
                     </div>
                 </div>
 
@@ -263,7 +297,7 @@ async def read_root():
                 </div>
 
                 <button type="submit" id="astroSubmitBtn" class="btn btn-primary w-100">
-                    <span id="astroBtnText">Swiss Ephemeris Haritasını Çıkar ve Analiz Et</span>
+                    <span id="astroBtnText">Swiss Ephemeris Haritasını Çıkar ve Yapay Zekaya Yorumlat</span>
                     <span id="astroBtnSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                 </button>
             </form>
@@ -288,7 +322,7 @@ async def read_root():
                 lblLat: "Enlem (Otomatik)",
                 lblLng: "Boylam (Otomatik)",
                 lblQuery: "Odaklanılacak Soru / Konu",
-                btnText: "Swiss Ephemeris Haritasını Çıkar ve Analiz Et",
+                btnText: "Swiss Ephemeris Haritasını Çıkar ve Yapay Zekaya Yorumlat",
                 resultTitle: "Analiz Sonucu"
             },
             en: {
@@ -303,68 +337,8 @@ async def read_root():
                 lblLat: "Latitude (Auto)",
                 lblLng: "Longitude (Auto)",
                 lblQuery: "Question / Focus Area",
-                btnText: "Generate Swiss Ephemeris Chart & Analyze",
+                btnText: "Generate Swiss Ephemeris Chart & AI Analysis",
                 resultTitle: "Analysis Result"
-            },
-            de: {
-                subTitle: "Konsole für Autonome Agenten",
-                formTitle: "Geburtshoroskop & Mystische Analyse",
-                lblTitle: "Vollständiger Name",
-                lblDate: "Geburtsdatum",
-                lblTime: "Geburtszeit",
-                lblCountry: "Geburtsland",
-                lblCity: "Geburtsstadt",
-                lblDistrict: "Bezirk",
-                lblLat: "Breitengrad (Auto)",
-                lblLng: "Längengrad (Auto)",
-                lblQuery: "Frage / Fokusbereich",
-                btnText: "Horoskop berechnen & analysieren",
-                resultTitle: "Analyseergebnis"
-            },
-            it: {
-                subTitle: "Console per Agenti Autonomi",
-                formTitle: "Carta Natale e Analisi Mistica",
-                lblTitle: "Nome e Cognome",
-                lblDate: "Data di Nascita",
-                lblTime: "Ora di Nascita",
-                lblCountry: "Paese di Nascita",
-                lblCity: "Città di Nascita",
-                lblDistrict: "Distretto",
-                lblLat: "Latitudine (Auto)",
-                lblLng: "Longitudine (Auto)",
-                lblQuery: "Domanda / Focus",
-                btnText: "Calcola Grafico ed Analizza",
-                resultTitle: "Risultato dell'Analisi"
-            },
-            es: {
-                subTitle: "Consola de Agentes Autónomos",
-                formTitle: "Carta Natal y Análisis Místico",
-                lblTitle: "Nombre Completo",
-                lblDate: "Fecha de Nacimiento",
-                lblTime: "Hora de Nacimiento",
-                lblCountry: "País de Nacimiento",
-                lblCity: "Ciudad de Nacimiento",
-                lblDistrict: "Distrito",
-                lblLat: "Latitud (Auto)",
-                lblLng: "Longitud (Auto)",
-                lblQuery: "Pregunta / Enfoque",
-                btnText: "Generar Carta y Analizar",
-                resultTitle: "Resultado del Análisis"
-            },
-            fr: {
-                subTitle: "Console d'Agents Autonomes",
-                formTitle: "Thème Astral et Analyse Mystique",
-                lblTitle: "Nom Complet",
-                lblDate: "Date de Naissance",
-                lblTime: "Heure de Naissance",
-                lblCountry: "Pays de Naissance",
-                lblCity: "Ville de Naissance",
-                lblDistrict: "District",
-                lblLat: "Latitude (Auto)",
-                lblLng: "Longitude (Auto)",
-                lblQuery: "Question / Sujet",
-                btnText: "Générer la Carte et Analyser",
-                resultTitle: "Résultat de l'Analyse"
             }
         };
 
@@ -477,13 +451,15 @@ async def read_root():
                     body: JSON.stringify(payload)
                 });
 
+                const data = await response.json();
+
                 if (response.status === 429) {
                     throw new Error("Çok fazla istek gönderdiniz. Lütfen 1 dakika bekleyip tekrar deneyin.");
                 }
 
-                if (!response.ok) throw new Error(`Sunucu Hatası: ${response.status}`);
-
-                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || `Sunucu Hatası: ${response.status}`);
+                }
                 
                 if (resultCard && resultBox) {
                     resultCard.classList.remove("d-none");
