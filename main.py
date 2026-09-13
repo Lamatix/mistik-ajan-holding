@@ -15,7 +15,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="MYSTIC THREAD STUDIO - Executive Enterprise Engine", version="8.0")
+app = FastAPI(title="MYSTIC THREAD STUDIO - Executive Enterprise Engine", version="9.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -35,7 +35,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-geolocator = Nominatim(user_agent="mystic_thread_studio_enterprise_v8")
+geolocator = Nominatim(user_agent="mystic_thread_studio_enterprise_v9")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 SIGNS = ["Koç", "Boğa", "İkizler", "Yengeç", "Aslan", "Başak", "Terazi", "Akrep", "Yay", "Oğlak", "Kova", "Balık"]
@@ -111,7 +111,7 @@ def astro_agent(req: AgentRequest) -> str:
         planets_data.append(f"{name}: {sign} ({deg % 30:.2f}°)")
 
     prompt = f"""
-    Sen Mistik Holding Baş Astrolog Ajanısın. Premium kurumsal hizmet veriyorsun.
+    Sen Mistik Holding Baş Astrolog Ajanısın. Premium kurumsal ve ezoterik hizmet veriyorsun.
     Danışan: {req.name} | Doğum: {req.birth_date} {req.birth_time} | Konum: {location_query} (Enlem: {lat:.2f}, Boylam: {lng:.2f})
     Yükselen Burç: {asc_sign} ({ascendant_degree}°)
     Gezegen Konumları: {', '.join(planets_data)}
@@ -221,53 +221,117 @@ async def read_root():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>MYSTIC THREAD STUDIO - Enterprise Holding Engine</title>
+        <title>MYSTIC THREAD STUDIO - Executive Enterprise Engine</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
         <style>
             :root {
-                --primary-color: #4f46e5;
-                --primary-hover: #4338ca;
-                --bg-main: #f8fafc;
-                --card-border: #e2e8f0;
+                --bg-gradient: linear-gradient(135deg, #0b0f19 0%, #111827 50%, #1e1b4b 100%);
+                --card-bg: rgba(30, 27, 75, 0.4);
+                --card-border: rgba(139, 92, 246, 0.25);
+                --accent-gold: #f59e0b;
+                --accent-purple: #8b5cf6;
+                --text-bright: #f8fafc;
+                --text-muted: #94a3b8;
             }
-            body { background-color: var(--bg-main); color: #0f172a; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-            .main-header { background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: white; padding: 2rem 0; border-radius: 0 0 20px 20px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
-            .card-custom { background: #ffffff; border: 1px solid var(--card-border); border-radius: 16px; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); }
+            body { 
+                background: var(--bg-gradient); 
+                color: var(--text-bright); 
+                font-family: 'Inter', system-ui, -apple-system, sans-serif;
+                min-height: 100vh;
+            }
+            .main-header { 
+                background: rgba(15, 23, 42, 0.75); 
+                backdrop-filter: blur(12px);
+                border-bottom: 1px solid var(--card-border); 
+                padding: 1.75rem 0; 
+            }
+            .card-custom { 
+                background: var(--card-bg); 
+                backdrop-filter: blur(16px);
+                border: 1px solid var(--card-border); 
+                border-radius: 18px; 
+                box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5); 
+            }
             
             .agent-card {
-                border: 2px solid #e2e8f0;
-                border-radius: 12px;
-                padding: 1rem;
+                border: 1px solid var(--card-border);
+                border-radius: 14px;
+                padding: 1.1rem;
                 cursor: pointer;
-                transition: all 0.25s ease;
-                background: #ffffff;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                background: rgba(15, 23, 42, 0.5);
             }
             .agent-card:hover {
-                border-color: var(--primary-color);
+                border-color: var(--accent-purple);
                 transform: translateY(-3px);
-                box-shadow: 0 8px 15px -3px rgba(79, 70, 229, 0.15);
+                box-shadow: 0 8px 25px rgba(139, 92, 246, 0.25);
             }
             .agent-card.active {
-                border-color: var(--primary-color);
-                background: linear-gradient(135deg, #eeefef 0%, #e0e7ff 100%);
-                box-shadow: 0 0 0 2px var(--primary-color);
+                border-color: var(--accent-gold);
+                background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(30, 27, 75, 0.6) 100%);
+                box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
             }
 
-            .form-label { font-weight: 600; color: #334155; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; }
-            .form-control, .form-select { border-radius: 8px; border: 1.5px solid #cbd5e1; padding: 0.75rem 1rem; font-weight: 500; }
-            .form-control:focus, .form-select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15); }
+            .form-label { font-weight: 600; color: #cbd5e1; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.6px; }
+            .form-control, .form-select { 
+                border-radius: 10px; 
+                border: 1px solid rgba(139, 92, 246, 0.3); 
+                background-color: rgba(15, 23, 42, 0.7) !important; 
+                color: #ffffff !important;
+                padding: 0.75rem 1rem; 
+                font-weight: 500; 
+            }
+            .form-control::placeholder { color: #64748b; }
+            .form-control:focus, .form-select:focus { 
+                border-color: var(--accent-gold); 
+                box-shadow: 0 0 12px rgba(245, 158, 11, 0.25); 
+            }
             
-            .btn-action { background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); border: none; border-radius: 10px; font-weight: 700; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
-            .btn-action:hover { background: linear-gradient(135deg, #4338ca 0%, #312e81 100%); transform: translateY(-1px); }
+            .btn-action { 
+                background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); 
+                border: 1px solid rgba(255,255,255,0.2); 
+                border-radius: 12px; 
+                font-weight: 700; 
+                letter-spacing: 0.5px; 
+                color: #ffffff;
+                box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4); 
+                transition: all 0.3s ease;
+            }
+            .btn-action:hover { 
+                background: linear-gradient(135deg, #6d28d9 0%, #4338ca 100%); 
+                transform: translateY(-2px); 
+                box-shadow: 0 6px 25px rgba(124, 58, 237, 0.6);
+            }
             
-            .quick-btn { border: 1px solid #cbd5e1; background: #ffffff; color: #475569; border-radius: 20px; padding: 0.35rem 0.9rem; font-size: 0.825rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-            .quick-btn:hover { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+            .quick-btn { 
+                border: 1px solid rgba(139, 92, 246, 0.4); 
+                background: rgba(30, 27, 75, 0.6); 
+                color: #cbd5e1; 
+                border-radius: 20px; 
+                padding: 0.35rem 0.9rem; 
+                font-size: 0.825rem; 
+                font-weight: 500; 
+                cursor: pointer; 
+                transition: all 0.2s; 
+            }
+            .quick-btn:hover { 
+                background: var(--accent-purple); 
+                color: white; 
+                border-color: var(--accent-purple); 
+            }
             
-            .result-container { background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.08); padding: 2rem; }
-            .result-body h1, .result-body h2, .result-body h3 { color: #1e1b4b; margin-top: 1.5rem; font-weight: 700; }
-            .result-body p { line-height: 1.8; color: #334155; font-size: 1.05rem; }
-            .result-body ul { background: #f8fafc; padding: 1.25rem 2rem; border-radius: 10px; border-left: 4px solid var(--primary-color); }
+            .result-container { 
+                background: rgba(15, 23, 42, 0.85); 
+                backdrop-filter: blur(20px);
+                border-radius: 18px; 
+                border: 1px solid var(--accent-gold); 
+                box-shadow: 0 10px 40px rgba(0,0,0,0.7); 
+                padding: 2.5rem; 
+            }
+            .result-body h1, .result-body h2, .result-body h3 { color: #fbbf24; margin-top: 1.5rem; font-weight: 700; }
+            .result-body p { line-height: 1.8; color: #e2e8f0; font-size: 1.05rem; }
+            .result-body ul { background: rgba(30, 27, 75, 0.5); padding: 1.25rem 2rem; border-radius: 12px; border-left: 4px solid var(--accent-gold); }
         </style>
     </head>
     <body>
@@ -275,11 +339,11 @@ async def read_root():
         <header class="main-header mb-4">
             <div class="container d-flex justify-content-between align-items-center">
                 <div>
-                    <h1 class="h3 fw-bold mb-1"><i class="fa-solid fa-crown text-warning me-2"></i>MYSTIC THREAD STUDIO</h1>
-                    <p class="mb-0 text-white-50 font-monospace small">ENTERPRISE MULTI-AGENT ORCHESTRATION ENGINE • 180 STORE NETWORK READY</p>
+                    <h1 class="h3 fw-bold mb-1 text-white"><i class="fa-solid fa-crown text-warning me-2"></i>MYSTIC THREAD STUDIO</h1>
+                    <p class="mb-0 text-white-50 font-monospace small">ENTERPRISE MULTI-AGENT ORCHESTRATION ENGINE • 180 STORE NETWORK</p>
                 </div>
                 <div class="text-end">
-                    <span class="badge bg-success px-3 py-2 rounded-pill"><i class="fa-solid fa-circle-check me-1"></i> SYSTEM ACTIVE</span>
+                    <span class="badge bg-purple px-3 py-2 rounded-pill" style="background:#6d28d9; border: 1px solid #a78bfa;"><i class="fa-solid fa-sparkles me-1 text-warning"></i> SYSTEM ACTIVE</span>
                 </div>
             </div>
         </header>
@@ -289,54 +353,54 @@ async def read_root():
                 <div class="col-md-4 col-lg-2.4">
                     <div class="agent-card active" onclick="selectAgent('ceo', this)">
                         <div class="d-flex align-items-center mb-2">
-                            <i class="fa-solid fa-chess-king fs-4 text-indigo me-2" style="color:#4f46e5;"></i>
-                            <strong class="text-dark">CEO Ajanı</strong>
+                            <i class="fa-solid fa-chess-king fs-4 me-2" style="color:#fbbf24;"></i>
+                            <strong class="text-white">CEO Ajanı</strong>
                         </div>
-                        <small class="text-muted d-block">Bütüncül Sentez & Strateji</small>
+                        <small class="text-white-50 d-block">Bütüncül Sentez & Strateji</small>
                     </div>
                 </div>
                 <div class="col-md-4 col-lg-2.4">
                     <div class="agent-card" onclick="selectAgent('astro', this)">
                         <div class="d-flex align-items-center mb-2">
-                            <i class="fa-solid fa-planet-ringed fs-4 me-2" style="color:#0284c7;"></i>
-                            <strong class="text-dark">Astroloji</strong>
+                            <i class="fa-solid fa-planet-ringed fs-4 me-2" style="color:#38bdf8;"></i>
+                            <strong class="text-white">Astroloji</strong>
                         </div>
-                        <small class="text-muted d-block">Doğum Haritası & Transit</small>
+                        <small class="text-white-50 d-block">Doğum Haritası & Transit</small>
                     </div>
                 </div>
                 <div class="col-md-4 col-lg-2.4">
                     <div class="agent-card" onclick="selectAgent('tarot', this)">
                         <div class="d-flex align-items-center mb-2">
-                            <i class="fa-solid fa-cards fs-4 me-2" style="color:#d97706;"></i>
-                            <strong class="text-dark">Tarot & Kehanet</strong>
+                            <i class="fa-solid fa-cards fs-4 me-2" style="color:#f59e0b;"></i>
+                            <strong class="text-white">Tarot & Kehanet</strong>
                         </div>
-                        <small class="text-muted d-block">3 Kart Sembolik Açılım</small>
+                        <small class="text-white-50 d-block">3 Kart Sembolik Açılım</small>
                     </div>
                 </div>
                 <div class="col-md-4 col-lg-2.4">
                     <div class="agent-card" onclick="selectAgent('numerology', this)">
                         <div class="d-flex align-items-center mb-2">
-                            <i class="fa-solid fa-calculator fs-4 me-2" style="color:#059669;"></i>
-                            <strong class="text-dark">Numeroloji</strong>
+                            <i class="fa-solid fa-calculator fs-4 me-2" style="color:#34d399;"></i>
+                            <strong class="text-white">Numeroloji</strong>
                         </div>
-                        <small class="text-muted d-block">Kader & Titreşim Sayısı</small>
+                        <small class="text-white-50 d-block">Kader & Titreşim Sayısı</small>
                     </div>
                 </div>
                 <div class="col-md-4 col-lg-2.4">
                     <div class="agent-card" onclick="selectAgent('dream', this)">
                         <div class="d-flex align-items-center mb-2">
-                            <i class="fa-solid fa-moon fs-4 me-2" style="color:#7c3aed;"></i>
-                            <strong class="text-dark">Rüya Analiz</strong>
+                            <i class="fa-solid fa-moon fs-4 me-2" style="color:#c084fc;"></i>
+                            <strong class="text-white">Rüya Analiz</strong>
                         </div>
-                        <small class="text-muted d-block">Bilinçaltı Çözümleme</small>
+                        <small class="text-white-50 d-block">Bilinçaltı Çözümleme</small>
                     </div>
                 </div>
             </div>
 
             <div class="card-custom p-4 mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
-                    <h4 class="fw-bold mb-0 text-dark" id="formTitle"><i class="fa-solid fa-sliders text-indigo me-2"></i>CEO Ajanı - Bütüncül Holding Sentezi</h4>
-                    <span class="text-muted small"><i class="fa-solid fa-shield-halved text-success me-1"></i> Safe & Encrypted Data</span>
+                <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-3">
+                    <h4 class="fw-bold mb-0 text-white" id="formTitle"><i class="fa-solid fa-wand-magic-sparkles text-warning me-2"></i>CEO Ajanı - Bütüncül Holding Sentezi</h4>
+                    <span class="text-white-50 small"><i class="fa-solid fa-shield-halved text-success me-1"></i> Safe & Encrypted Data</span>
                 </div>
 
                 <form onsubmit="handleFormSubmit(event)">
@@ -381,10 +445,10 @@ async def read_root():
                         </div>
                     </div>
 
-                    <div class="mb-3">
+                    <div class="mb-4">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <label class="form-label mb-0">Soru / Niyet / Rüya Detayı</label>
-                            <div class="d-flex gap-1">
+                            <div class="d-flex gap-2">
                                 <button type="button" class="quick-btn" onclick="setQuestion('Gelecek dönemdeki kariyer, yatırım ve finansal fırsatlarım nelerdir?')">💼 Kariyer & Finans</button>
                                 <button type="button" class="quick-btn" onclick="setQuestion('İlişki ve evlilik potansiyelim, ruh eşi döngülerim neleri gösteriyor?')">❤️ İlişki & Uyum</button>
                                 <button type="button" class="quick-btn" onclick="setQuestion('Bu gece gördüğüm rüyanın derin psikolojik ve mistik anlamı nedir?')">🌙 Rüya Analizi</button>
@@ -394,19 +458,19 @@ async def read_root():
                     </div>
 
                     <button type="submit" id="submitBtn" class="btn btn-action text-white w-100 py-3 fs-5">
-                        <span id="btnText"><i class="fa-solid fa-wand-magic-sparkles me-2"></i>Holding Ajan Analizini Başlat</span>
+                        <span id="btnText"><i class="fa-solid fa-sparkles text-warning me-2"></i>Holding Ajan Analizini Başlat</span>
                         <span id="btnSpinner" class="spinner-border spinner-border-sm d-none me-2" role="status"></span>
                     </button>
                 </form>
             </div>
 
             <div id="resultCard" class="result-container d-none">
-                <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-4">
+                <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4">
                     <div>
-                        <span class="badge bg-indigo text-white mb-1" style="background:#4f46e5;">EXECUTIVE REPORT</span>
-                        <h3 class="fw-bold mb-0 text-dark">Mistik Holding Analiz Çıktısı</h3>
+                        <span class="badge bg-warning text-dark font-monospace mb-1 fw-bold">EXECUTIVE REPORT</span>
+                        <h3 class="fw-bold mb-0 text-white">Mistik Holding Analiz Çıktısı</h3>
                     </div>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="fa-solid fa-print me-1"></i> Raporu Yazdır / PDF</button>
+                    <button class="btn btn-outline-light btn-sm" onclick="window.print()"><i class="fa-solid fa-print me-1"></i> Raporu Yazdır / PDF</button>
                 </div>
                 <div id="resultBox" class="result-body"></div>
             </div>
@@ -445,11 +509,11 @@ async def read_root():
             document.getElementById('selectedAgent').value = type;
 
             const title = document.getElementById('formTitle');
-            if (type === 'ceo') title.innerHTML = '<i class="fa-solid fa-chess-king text-indigo me-2"></i>CEO Ajanı - Bütüncül Holding Sentezi';
-            else if (type === 'astro') title.innerHTML = '<i class="fa-solid fa-planet-ringed text-indigo me-2"></i>Astroloji Ajanı - Doğum Haritası Raporu';
-            else if (type === 'tarot') title.innerHTML = '<i class="fa-solid fa-cards text-indigo me-2"></i>Tarot Ajanı - Kart Kehaneti';
-            else if (type === 'numerology') title.innerHTML = '<i class="fa-solid fa-calculator text-indigo me-2"></i>Numeroloji Ajanı - Sayısal Frekans Analizi';
-            else if (type === 'dream') title.innerHTML = '<i class="fa-solid fa-moon text-indigo me-2"></i>Rüya Ajanı - Bilinçaltı Çözümlemesi';
+            if (type === 'ceo') title.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-warning me-2"></i>CEO Ajanı - Bütüncül Holding Sentezi';
+            else if (type === 'astro') title.innerHTML = '<i class="fa-solid fa-planet-ringed text-info me-2"></i>Astroloji Ajanı - Doğum Haritası Raporu';
+            else if (type === 'tarot') title.innerHTML = '<i class="fa-solid fa-cards text-warning me-2"></i>Tarot Ajanı - Kart Kehaneti';
+            else if (type === 'numerology') title.innerHTML = '<i class="fa-solid fa-calculator text-success me-2"></i>Numeroloji Ajanı - Sayısal Frekans Analizi';
+            else if (type === 'dream') title.innerHTML = '<i class="fa-solid fa-moon text-purple me-2"></i>Rüya Ajanı - Bilinçaltı Çözümlemesi';
         }
 
         async function handleFormSubmit(e) {
@@ -495,7 +559,7 @@ async def read_root():
             } finally {
                 submitBtn.disabled = false;
                 btnSpinner.classList.add('d-none');
-                btnText.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles me-2"></i>Holding Ajan Analizini Başlat';
+                btnText.innerHTML = '<i class="fa-solid fa-sparkles text-warning me-2"></i>Holding Ajan Analizini Başlat';
             }
         }
         </script>
