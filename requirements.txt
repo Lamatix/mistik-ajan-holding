@@ -1,7 +1,11 @@
-flask
+fastapi
+uvicorn
 gunicorn
+flask
 crewai
 langchain-google-genai
 requests
 reportlab
 pyswisseph
+geopy
+slowapi
