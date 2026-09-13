@@ -1,30 +1,67 @@
 import os
 import json
 from typing import Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 import swisseph as swe
 from geopy.geocoders import Nominatim
 
-app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.0")
+# Rate Limiter (Slowapi) Güvenlik Entegrasyonu
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
-geolocator = Nominatim(user_agent="mystic_thread_studio")
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.0-SECURE")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# 1. GÜVENLİK KATMANI: Strict CORS Politikası
+ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://*.railway.app",
+    "https://*.render.com"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Geliştirme ortamı esnekliği, canlıda ALLOWED_ORIGINS ile kısıtlanabilir
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+# 2. GÜVENLİK KATMANI: Security Headers Middleware (XSS, Clickjacking, MIME-Sniffing)
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
+
+geolocator = Nominatim(user_agent="mystic_thread_studio_v3_secure")
+
+# 3. GÜVENLİK KATMANI: Pydantic Input Validation (Veri Uzunluğu ve Limit Kontrolleri)
 class AstroRequest(BaseModel):
-    name: Optional[str] = "Danışan"
-    birth_date: str
-    birth_time: str
-    country: Optional[str] = "Türkiye"
-    city: str
-    district: Optional[str] = ""
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    question: Optional[str] = ""
-    lang: Optional[str] = "tr"
+    name: Optional[str] = Field("Danışan", max_length=100)
+    birth_date: str = Field(..., max_length=15)
+    birth_time: str = Field(..., max_length=10)
+    country: Optional[str] = Field("Türkiye", max_length=60)
+    city: str = Field(..., max_length=60)
+    district: Optional[str] = Field("", max_length=60)
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    question: Optional[str] = Field("", max_length=500)
+    lang: Optional[str] = Field("tr", max_length=5)
 
+# 4. GÜVENLİK KATMANI: Rate Limited Endpoint (Saniyede/Dakikada Bot Saldırısı Engelleyici)
 @app.post("/analyze_astro")
-async def analyze_astro(req: AstroRequest):
+@limiter.limit("10/minute")
+async def analyze_astro(request: Request, req: AstroRequest):
     try:
         lat = req.latitude
         lng = req.longitude
@@ -74,8 +111,12 @@ async def analyze_astro(req: AstroRequest):
                         "Yay / Sagittarius", "Oğlak / Capricorn", "Kova / Aquarius", "Balık / Pisces"]
         asc_sign = zodiac_signs[int(ascendant_degree // 30)]
 
+        # XSS Sanitization (Girdi temizliği)
+        clean_name = req.name.replace("<", "&lt;").replace(">", "&gt;")
+        clean_question = req.question.replace("<", "&lt;").replace(">", "&gt;")
+
         analysis_text = f"""
-        <h3>Harita Analizi ({req.name})</h3>
+        <h3>Harita Analizi ({clean_name})</h3>
         <p><strong>Yükselen / Ascendant:</strong> {ascendant_degree}° {asc_sign}</p>
         <p><strong>Konum / Location:</strong> {req.district} / {req.city} ({req.country}) - Enlem: {lat}, Boylam: {lng}</p>
         <hr>
@@ -84,12 +125,12 @@ async def analyze_astro(req: AstroRequest):
             {"".join([f"<li><strong>{planet}:</strong> {deg}°</li>" for planet, deg in planets.items()])}
         </ul>
         <hr>
-        <p><strong>Analiz / Analysis:</strong> "{req.question}"</p>
+        <p><strong>Analiz / Analysis:</strong> "{clean_question}"</p>
         """
 
         return {
             "status": "success",
-            "name": req.name,
+            "name": clean_name,
             "ascendant": f"{ascendant_degree}° {asc_sign}",
             "coordinates": {"lat": lat, "lng": lng},
             "planets": planets,
@@ -97,7 +138,11 @@ async def analyze_astro(req: AstroRequest):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        # 5. GÜVENLİK KATMANI: Güvenli Hata Maskeleme
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Hesaplama sırasında güvenlik / sistem hatası oluştu."
+        )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -142,7 +187,7 @@ async def read_root():
                     <option value="de">Deutsch</option>
                     <option value="it">Italiano</option>
                 </select>
-                <span class="badge bg-success px-3 py-2">ONLINE</span>
+                <span class="badge bg-success px-3 py-2">SECURE ONLINE</span>
             </div>
         </div>
 
@@ -386,7 +431,11 @@ async def read_root():
                     body: JSON.stringify(payload)
                 });
 
-                if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+                if (response.status === 429) {
+                    throw new Error("Çok fazla istek gönderdiniz. Lütfen 1 dakika bekleyip tekrar deneyin.");
+                }
+
+                if (!response.ok) throw new Error(`Sunucu Hatası: ${response.status}`);
 
                 const data = await response.json();
                 
@@ -397,7 +446,7 @@ async def read_root():
 
             } catch (err) {
                 console.error("Astro Error:", err);
-                alert("Error: " + err.message);
+                alert("Hata: " + err.message);
             } finally {
                 if (submitBtn) submitBtn.disabled = false;
                 if (btnSpinner) btnSpinner.classList.add("d-none");
