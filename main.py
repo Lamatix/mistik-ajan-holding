@@ -14,7 +14,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.3-AI")
+app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.4-AUTOFORMAT")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -41,9 +41,9 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-geolocator = Nominatim(user_agent="mystic_thread_studio_v3_3")
+geolocator = Nominatim(user_agent="mystic_thread_studio_v3_4")
 
-# Gemini Model Entegrasyonu (Sistem Environment Variable'dan GEMINI_API_KEY okur)
+# Gemini Model Entegrasyonu
 llm = ChatGoogleGenerativeAI(
     model="gemini-1.5-flash",
     temperature=0.7,
@@ -117,7 +117,6 @@ async def analyze_astro(request: Request, req: AstroRequest):
         clean_name = req.name.replace("<", "&lt;").replace(">", "&gt;")
         clean_question = req.question.replace("<", "&lt;").replace(">", "&gt;")
 
-        # Yapay Zeka İstemi (Prompting)
         prompt = f"""
         Sen profesyonel, sezgisel ve uzman bir astrolog ve mistik danışmansın.
         Aşağıdaki Swiss Ephemeris doğum haritası verilerini incele ve danışanın sorusunu detaylıca analiz et.
@@ -142,7 +141,7 @@ async def analyze_astro(request: Request, req: AstroRequest):
             ai_response = llm.invoke(prompt)
             ai_commentary = ai_response.content
         except Exception as ai_err:
-            ai_commentary = f"<p class='text-warning'>Yapay zeka yorumu oluşturulamadı: {str(ai_err)}. Lütfen GEMINI_API_KEY anahtarınızı Render ortam değişkenlerinde kontrol edin.</p>"
+            ai_commentary = f"<p class='text-warning'>Yapay zeka yorumu oluşturulamadı: {str(ai_err)}. Lütfen GEMINI_API_KEY ortam değişkenini kontrol edin.</p>"
 
         analysis_html = f"""
         <h3>Harita Analizi ({clean_name})</h3>
@@ -255,11 +254,11 @@ async def read_root():
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="form-label" id="lblDate">Doğum Tarihi</label>
-                        <input type="text" id="astroDateInput" class="form-control" value="15.05.1995" placeholder="GG.AA.YYYY" required>
+                        <input type="text" id="astroDateInput" class="form-control" value="15.05.1995" placeholder="GG.AA.YYYY" maxlength="10" oninput="formatDateInput(this)" required>
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="form-label" id="lblTime">Doğum Saati</label>
-                        <input type="text" id="astroTimeInput" class="form-control" value="14:30" placeholder="HH:MM" required>
+                        <input type="text" id="astroTimeInput" class="form-control" value="14:30" placeholder="HH:MM" maxlength="5" oninput="formatTimeInput(this)" required>
                     </div>
                 </div>
 
@@ -309,6 +308,32 @@ async def read_root():
         </div>
 
         <script>
+        // OTOMATİK TARİH FORMATLAMA (GG.AA.YYYY)
+        function formatDateInput(input) {
+            let v = input.value.replace(/\D/g, ''); // Sadece rakamları al
+            if (v.length > 8) v = v.substring(0, 8);
+            
+            if (v.length > 4) {
+                input.value = v.substring(0, 2) + '.' + v.substring(2, 4) + '.' + v.substring(4);
+            } else if (v.length > 2) {
+                input.value = v.substring(0, 2) + '.' + v.substring(2);
+            } else {
+                input.value = v;
+            }
+        }
+
+        // OTOMATİK SAAT FORMATLAMA (HH:MM)
+        function formatTimeInput(input) {
+            let v = input.value.replace(/\D/g, ''); // Sadece rakamları al
+            if (v.length > 4) v = v.substring(0, 4);
+            
+            if (v.length > 2) {
+                input.value = v.substring(0, 2) + ':' + v.substring(2);
+            } else {
+                input.value = v;
+            }
+        }
+
         const i18n = {
             tr: {
                 subTitle: "Holding Otonom Ajan Konsolu",
