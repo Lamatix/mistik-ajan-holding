@@ -1,110 +1,147 @@
-import os
-import json
-from datetime import datetime
 import requests
+import json
+import base64
+from PIL import Image, ImageDraw
+import io
 
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
-
-# Mevcut Canlı Servis Adresiniz
-url = "https://mistik-ajan-holding.onrender.com/analyze"
-headers = {
+BASE_URL = "https://mistik-ajan-holding.onrender.com"
+HEADERS = {
     "Content-Type": "application/json",
     "X-API-KEY": "mistik-secret-key-2026"
 }
 
-# Google Sheets Webhook URL
-GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxcgc69O8M1UmPKpooW-9Qs481rb9FaX8MIWwNYhhq-nSsdhU_j31C4u3CoTVu7-QXegQ/exec"
-
-# Gönderilecek İstek Metni
-query_text = "Mystic Thread Studio için 2026 sosyal medya ve büyüme stratejisi oluştur."
-data = {"query": query_text}
-
-print("Mystic Thread Studio'ya (https://mistik-ajan-holding.onrender.com) istek gönderiliyor...")
-
-try:
-    response = requests.post(url, json=data, headers=headers, timeout=300)
+def create_mock_coffee_image():
+    """Kahve falı testi için bellek üzerinde geçici bir test görseli üretir."""
+    img = Image.new('RGB', (300, 300), color=(60, 40, 20))
+    d = ImageDraw.Draw(img)
+    d.ellipse([(50, 50), (250, 250)], fill=(20, 10, 5))
+    d.ellipse([(100, 100), (160, 180)], fill=(120, 90, 60)) # Telve şekli simülasyonu
     
-    if response.status_code == 200:
-        result = response.json()
-        
-        # Raporların kaydedileceği klasör
-        output_dir = "holding_raporlari"
-        os.makedirs(output_dir, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        date_str = datetime.now().strftime("%d.%m.%Y %H:%M")
-        
-        filename_json = os.path.join(output_dir, f"rapor_{timestamp}.json")
-        filename_txt = os.path.join(output_dir, f"rapor_{timestamp}.txt")
-        filename_pdf = os.path.join(output_dir, f"rapor_{timestamp}.pdf")
-        
-        # 1. JSON Olarak Kaydet
-        with open(filename_json, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=4)
-            
-        # 2. TXT Olarak Kaydet
-        with open(filename_txt, "w", encoding="utf-8") as f:
-            f.write(f"=== MYSTIC THREAD STUDIO RAPORU ({timestamp}) ===\n")
-            f.write(f"SORGU / KONU: {query_text}\n\n")
-            f.write("--- İSTİHBARAT VE STRATEJİ DİREKTÖRLÜĞÜ ---\n")
-            f.write(result.get("intelligence_and_strategy", "") + "\n\n")
-            f.write("--- KREATİF VE VİDEO KURGU YÖNETMENLİĞİ ---\n")
-            f.write(result.get("creative_and_video_guide", "") + "\n\n")
-            f.write("--- ÜRETİLEN GÖRSEL URL ---\n")
-            f.write(result.get("generated_image_url", "") + "\n")
-            
-        # 3. PDF Olarak Kaydet (ReportLab)
-        doc = SimpleDocTemplate(filename_pdf, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
-        styles = getSampleStyleSheet()
-        
-        title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=20, textColor=colors.HexColor('#4338ca'), spaceAfter=4)
-        meta_style = ParagraphStyle('MetaStyle', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor('#64748b'), spaceAfter=2)
-        section_style = ParagraphStyle('SectionStyle', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=13, textColor=colors.HexColor('#1e293b'), spaceBefore=14, spaceAfter=6)
-        body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontName='Helvetica', fontSize=9.5, leading=14, textColor=colors.HexColor('#334155'), spaceAfter=6)
+    buffered = io.BytesIO()
+    img.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
-        elements = [
-            Paragraph("MYSTIC THREAD STUDIO", title_style),
-            Paragraph(f"Otonom Strateji & Prodüksiyon Raporu | Tarih: {date_str}", meta_style),
-            Paragraph(f"<b>Sorgu / Konu:</b> {query_text}", meta_style),
-            Spacer(1, 10),
-            HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#4338ca'), spaceAfter=15),
-            Paragraph("1. İSTİHBARAT VE STRATEJİ DİREKTÖRLÜĞÜ", section_style),
-            Paragraph(result.get("intelligence_and_strategy", "").replace("\n", "<br/>"), body_style),
-            Spacer(1, 10),
-            Paragraph("2. KREATİF VE VİDEO KURGU YÖNETMENLİĞİ", section_style),
-            Paragraph(result.get("creative_and_video_guide", "").replace("\n", "<br/>"), body_style),
-            Spacer(1, 10),
-            Paragraph("3. ÜRETİLEN GÖRSEL KONSEPTİ", section_style),
-            Paragraph(f"<b>Görsel Bağlantısı:</b> <a href='{result.get('generated_image_url', '')}' color='blue'>{result.get('generated_image_url', '')}</a>", body_style)
-        ]
-        doc.build(elements)
+def print_separator(title):
+    print("\n" + "="*70)
+    print(f"  {title}")
+    print("="*70)
 
-        # 4. Google Sheets Webhook'una Veri Gönder
-        sheet_payload = {
-            "date": date_str,
-            "query": query_text,
-            "intelligence_and_strategy": result.get("intelligence_and_strategy", ""),
-            "creative_and_video_guide": result.get("creative_and_video_guide", ""),
-            "generated_image_url": result.get("generated_image_url", "")
-        }
-        try:
-            sheet_res = requests.post(GOOGLE_SHEETS_WEBHOOK_URL, json=sheet_payload, timeout=15)
-            if sheet_res.status_code == 200:
-                print(" Google Sheets Tablosuna Otomatik Aktarıldı!")
-        except Exception as se:
-            print(" Google Sheets Aktarım Hatası:", se)
+def test_default_analyze():
+    print_separator("0. VARSAYILAN /analyze ENDPOINT TESTİ (GERİYE DÖNÜK UYUM)")
+    url = f"{BASE_URL}/analyze"
+    payload = {
+        "query": "Geriye dönük uyumluluk testi: Eski test istekleri çalışıyor mu?"
+    }
+    try:
+        response = requests.post(url, json=payload, headers=HEADERS)
+        print("HTTP Yanıt Kodu:", response.status_code)
+        if response.status_code == 200:
+            data = response.json()
+            print("\n[BAŞARILI] Yanıt İçeriği:")
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+        else:
+            print("\n[HATA]:", response.text)
+    except Exception as e:
+        print("\n[İSTİSNA HATA]:", str(e))
 
-        print("\n İşlem Başarılı!")
-        print(f" JSON Raporu Kaydedildi: {filename_json}")
-        print(f" TXT Raporu Kaydedildi: {filename_txt}")
-        print(f" PDF Raporu Oluşturuldu: {filename_pdf}")
-        
-    else:
-        print(f" Yanıt Kodu: {response.status_code}")
-        print("Yanıt Metni:", response.text)
+def test_strategy():
+    print_separator("1. SOSYAL MEDYA & STRATEJİ AJANI TESTİ (/analyze_strategy)")
+    url = f"{BASE_URL}/analyze_strategy"
+    payload = {
+        "query": "Mystic Thread Studio için 2026 yılı cross-platform büyüme ve video kurgu stratejisi hazırlayın."
+    }
+    try:
+        response = requests.post(url, json=payload, headers=HEADERS)
+        print("HTTP Yanıt Kodu:", response.status_code)
+        if response.status_code == 200:
+            data = response.json()
+            print("\n--- İSTİHBARAT VE STRATEJİ ---")
+            print(data.get("intelligence_and_strategy"))
+            print("\n--- KREATİF VE VİDEO REHBERİ ---")
+            print(data.get("creative_and_video_guide"))
+            print("\n--- ÜRETİLEN GÖRSEL URL ---")
+            print(data.get("generated_image_url"))
+        else:
+            print("\n[HATA]:", response.text)
+    except Exception as e:
+        print("\n[İSTİSNA HATA]:", str(e))
 
-except Exception as e:
-    print(" İstek Hatası:", e)
+def test_astro():
+    print_separator("2. SWISS EPHEMERIS ASTROLOJİ AJANI TESTİ (/analyze_astro)")
+    url = f"{BASE_URL}/analyze_astro"
+    payload = {
+        "name": "Sercan Bilir",
+        "birth_date": "1995-05-15",
+        "birth_time": "14:30",
+        "query": "Kariyer potansiyelim, dijital projelerim ve önümdeki fırsatlar hakkında haritam ne söylüyor?"
+    }
+    try:
+        response = requests.post(url, json=payload, headers=HEADERS)
+        print("HTTP Yanıt Kodu:", response.status_code)
+        if response.status_code == 200:
+            data = response.json()
+            print("\n--- DOĞUM HARİTASI HESAPLAMA VERİSİ ---")
+            print(json.dumps(data.get("natal_chart_data"), indent=2, ensure_ascii=False))
+            print("\n--- ASTROLOG YORUMU ---")
+            print(data.get("astrology_interpretation"))
+            print("\n--- ÜRETİLEN GÖRSEL URL ---")
+            print(data.get("generated_image_url"))
+        else:
+            print("\n[HATA]:", response.text)
+    except Exception as e:
+        print("\n[İSTİSNA HATA]:", str(e))
+
+def test_tarot():
+    print_separator("3. TAROT ÜSTADI AJANI TESTİ (/analyze_tarot)")
+    url = f"{BASE_URL}/analyze_tarot"
+    payload = {
+        "cards": ["The Fool (Deli)", "The Tower (Yıkılan Kule)", "The Star (Yıldız)"],
+        "query": "Proje ve içerik üretim süreçlerimde yaşadığım dönüşüm beni nereye götürecek?"
+    }
+    try:
+        response = requests.post(url, json=payload, headers=HEADERS)
+        print("HTTP Yanıt Kodu:", response.status_code)
+        if response.status_code == 200:
+            data = response.json()
+            print("\n--- TAROT AÇILIM YORUMU ---")
+            print(data.get("tarot_interpretation"))
+            print("\n--- ÜRETİLEN GÖRSEL URL ---")
+            print(data.get("generated_image_url"))
+        else:
+            print("\n[HATA]:", response.text)
+    except Exception as e:
+        print("\n[İSTİSNA HATA]:", str(e))
+
+def test_coffee():
+    print_separator("4. KAHVE FALI & VISION AI TESTİ (/analyze_coffee)")
+    url = f"{BASE_URL}/analyze_coffee"
+    mock_base64 = create_mock_coffee_image()
+    
+    payload = {
+        "image_base64": mock_base64,
+        "query": "Gelecekteki maddi başarılar ve yeni iş ortaklıkları fincanda görünüyor mu?"
+    }
+    try:
+        response = requests.post(url, json=payload, headers=HEADERS)
+        print("HTTP Yanıt Kodu:", response.status_code)
+        if response.status_code == 200:
+            data = response.json()
+            print("\n--- VISION AI İLE TESPİT EDİLEN SEMBOLLER ---")
+            print(data.get("detected_symbols"))
+            print("\n--- KAHVE FALI YORUMU ---")
+            print(data.get("coffee_interpretation"))
+            print("\n--- ÜRETİLEN GÖRSEL URL ---")
+            print(data.get("generated_image_url"))
+        else:
+            print("\n[HATA]:", response.text)
+    except Exception as e:
+        print("\n[İSTİSNA HATA]:", str(e))
+
+if __name__ == "__main__":
+    print("MYSTIC THREAD STUDIO - TÜM SERVİSLERİ KAPSAMLI TEST BAŞLATILIYOR...")
+    test_default_analyze()
+    test_strategy()
+    test_astro()
+    test_tarot()
+    test_coffee()
+    print_separator("TÜM TESTLER TAMAMLANDI")
