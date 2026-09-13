@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
@@ -14,7 +15,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.4-AUTOFORMAT")
+app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.6-MULTI-LOCALE")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -41,14 +42,15 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-geolocator = Nominatim(user_agent="mystic_thread_studio_v3_4")
+geolocator = Nominatim(user_agent="mystic_thread_studio_v3_6")
 
-# Gemini Model Entegrasyonu
+# Gemini Model Entegrasyonu (404 hatasını önlemek için tam model adı kullanımı)
+api_key = os.getenv("GEMINI_API_KEY", "")
 llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
+    model="models/gemini-1.5-flash",
     temperature=0.7,
-    google_api_key=os.getenv("GEMINI_API_KEY", "")
-)
+    google_api_key=api_key
+) if api_key else None
 
 class AstroRequest(BaseModel):
     name: Optional[str] = Field("Danışan", max_length=100)
@@ -61,6 +63,34 @@ class AstroRequest(BaseModel):
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     question: Optional[str] = Field("", max_length=500)
     lang: Optional[str] = Field("tr", max_length=5)
+
+def parse_date_by_locale(date_str: str, lang: str):
+    """
+    Farklı dillerdeki tarih formatlarını otomatik çözer:
+    - tr, de, it, es, fr, pt, ru, ar -> GG.AA.YYYY veya GG/AA/YYYY
+    - en -> MM/DD/YYYY
+    - yyyy-mm-dd
+    """
+    clean_str = re.sub(r"[^\d]", " ", date_str).strip()
+    parts = [int(p) for p in clean_str.split() if p.isdigit()]
+    
+    if len(parts) != 3:
+        raise ValueError("Geçersiz tarih formatı")
+
+    p1, p2, p3 = parts
+
+    # Eğer 1. değer 1000'den büyükse: YYYY-MM-DD
+    if p1 > 1000:
+        return p3, p2, p1  # day, month, year
+
+    # EN dili seçildiyse: MM/DD/YYYY
+    if lang == "en":
+        month, day, year = p1, p2, p3
+    else:
+        # TR ve diğer diller: DD.MM.YYYY
+        day, month, year = p1, p2, p3
+
+    return day, month, year
 
 @app.post("/analyze_astro")
 @limiter.limit("10/minute")
@@ -84,8 +114,7 @@ async def analyze_astro(request: Request, req: AstroRequest):
                 else:
                     lat, lng = 41.0082, 28.9784
 
-        date_parts = req.birth_date.replace("/", ".").replace("-", ".").split(".")
-        day, month, year = int(date_parts[0]), int(date_parts[1]), int(date_parts[2])
+        day, month, year = parse_date_by_locale(req.birth_date, req.lang or "tr")
 
         clean_time = req.birth_time.replace(".", ":")
         time_parts = clean_time.split(":")
@@ -121,7 +150,7 @@ async def analyze_astro(request: Request, req: AstroRequest):
         Sen profesyonel, sezgisel ve uzman bir astrolog ve mistik danışmansın.
         Aşağıdaki Swiss Ephemeris doğum haritası verilerini incele ve danışanın sorusunu detaylıca analiz et.
 
-        DİL REQUIREMENT: Yanıtını tamamen {req.lang} dilinde ver.
+        DİL REQUIREMENT: Yanıtını tamamen '{req.lang}' dilinde ver.
 
         DANIŞAN BİLGİLERİ:
         - İsim: {clean_name}
@@ -137,11 +166,14 @@ async def analyze_astro(request: Request, req: AstroRequest):
         Lütfen HTML formatında (<h3>, <p>, <ul>, <li>, <strong> etiketlerini kullanarak) estetik ve okunaklı biçimde yanıt üret.
         """
 
-        try:
-            ai_response = llm.invoke(prompt)
-            ai_commentary = ai_response.content
-        except Exception as ai_err:
-            ai_commentary = f"<p class='text-warning'>Yapay zeka yorumu oluşturulamadı: {str(ai_err)}. Lütfen GEMINI_API_KEY ortam değişkenini kontrol edin.</p>"
+        if llm:
+            try:
+                ai_response = llm.invoke(prompt)
+                ai_commentary = ai_response.content
+            except Exception as ai_err:
+                ai_commentary = f"<p class='text-warning'>Yapay zeka yorumu oluşturulamadı: {str(ai_err)}. Lütfen GEMINI_API_KEY anahtarınızı ve model yetkilerini kontrol edin.</p>"
+        else:
+            ai_commentary = "<p class='text-warning'>GEMINI_API_KEY tanımlanmadığı için yapay zeka analizi atlandı.</p>"
 
         analysis_html = f"""
         <h3>Harita Analizi ({clean_name})</h3>
@@ -167,10 +199,10 @@ async def analyze_astro(request: Request, req: AstroRequest):
             "analysis": analysis_html
         }
 
-    except ValueError:
+    except ValueError as ve:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tarih veya Saat formatı hatalı. Örn: 15.05.1995 ve 14:30 giriniz."
+            detail=f"Tarih veya Saat formatı hatalı: {str(ve)}"
         )
     except Exception as e:
         raise HTTPException(
@@ -238,6 +270,9 @@ async def read_root():
                     <option value="it">Italiano</option>
                     <option value="es">Español</option>
                     <option value="fr">Français</option>
+                    <option value="pt">Português</option>
+                    <option value="ru">Русский</option>
+                    <option value="ar">العربية</option>
                 </select>
                 <span class="badge bg-success px-3 py-2">SECURE ONLINE</span>
             </div>
@@ -308,32 +343,7 @@ async def read_root():
         </div>
 
         <script>
-        // OTOMATİK TARİH FORMATLAMA (GG.AA.YYYY)
-        function formatDateInput(input) {
-            let v = input.value.replace(/\D/g, ''); // Sadece rakamları al
-            if (v.length > 8) v = v.substring(0, 8);
-            
-            if (v.length > 4) {
-                input.value = v.substring(0, 2) + '.' + v.substring(2, 4) + '.' + v.substring(4);
-            } else if (v.length > 2) {
-                input.value = v.substring(0, 2) + '.' + v.substring(2);
-            } else {
-                input.value = v;
-            }
-        }
-
-        // OTOMATİK SAAT FORMATLAMA (HH:MM)
-        function formatTimeInput(input) {
-            let v = input.value.replace(/\D/g, ''); // Sadece rakamları al
-            if (v.length > 4) v = v.substring(0, 4);
-            
-            if (v.length > 2) {
-                input.value = v.substring(0, 2) + ':' + v.substring(2);
-            } else {
-                input.value = v;
-            }
-        }
-
+        // DİLE GÖRE DİNAMİK DOKUNMATİK MASKELER VE DİL LİSTESİ
         const i18n = {
             tr: {
                 subTitle: "Holding Otonom Ajan Konsolu",
@@ -348,7 +358,9 @@ async def read_root():
                 lblLng: "Boylam (Otomatik)",
                 lblQuery: "Odaklanılacak Soru / Konu",
                 btnText: "Swiss Ephemeris Haritasını Çıkar ve Yapay Zekaya Yorumlat",
-                resultTitle: "Analiz Sonucu"
+                resultTitle: "Analiz Sonucu",
+                datePlaceholder: "GG.AA.YYYY",
+                dateMask: "DD.MM.YYYY"
             },
             en: {
                 subTitle: "Holding Autonomous Agent Console",
@@ -363,9 +375,158 @@ async def read_root():
                 lblLng: "Longitude (Auto)",
                 lblQuery: "Question / Focus Area",
                 btnText: "Generate Swiss Ephemeris Chart & AI Analysis",
-                resultTitle: "Analysis Result"
+                resultTitle: "Analysis Result",
+                datePlaceholder: "MM/DD/YYYY",
+                dateMask: "MM/DD/YYYY"
+            },
+            de: {
+                subTitle: "Holding Autonomes Agenten-Konsol",
+                formTitle: "Geburtshoroskop & Mystische Analyse",
+                lblTitle: "Vollständiger Name / Kunde",
+                lblDate: "Geburtsdatum",
+                lblTime: "Geburtszeit",
+                lblCountry: "Geburtsland",
+                lblCity: "Geburtsstadt",
+                lblDistrict: "Bezirk",
+                lblLat: "Breitengrad (Auto)",
+                lblLng: "Längengrad (Auto)",
+                lblQuery: "Frage / Fokusbereich",
+                btnText: "Swiss Ephemeris Horoskop & KI-Analyse Erstellen",
+                resultTitle: "Analyse-Ergebnis",
+                datePlaceholder: "TT.MM.JJJJ",
+                dateMask: "DD.MM.YYYY"
+            },
+            it: {
+                subTitle: "Console Agente Autonomo Holding",
+                formTitle: "Tema Natale e Analisi Mistica",
+                lblTitle: "Nome e Cognome / Cliente",
+                lblDate: "Data di Nascita",
+                lblTime: "Ora di Nascita",
+                lblCountry: "Paese di Nascita",
+                lblCity: "Città di Nascita",
+                lblDistrict: "Quartiere / Distretto",
+                lblLat: "Latitudine (Auto)",
+                lblLng: "Longitudine (Auto)",
+                lblQuery: "Domanda / Area di Focus",
+                btnText: "Genera Carta Swiss Ephemeris e Analisi IA",
+                resultTitle: "Risultato dell'Analisi",
+                datePlaceholder: "GG/MM/AAAA",
+                dateMask: "DD/MM/YYYY"
+            },
+            es: {
+                subTitle: "Consola de Agente Autónomo",
+                formTitle: "Carta Natal y Análisis Místico",
+                lblTitle: "Nombre Completo / Cliente",
+                lblDate: "Fecha de Nacimiento",
+                lblTime: "Hora de Nacimiento",
+                lblCountry: "País de Nacimiento",
+                lblCity: "Ciudad de Nacimiento",
+                lblDistrict: "Distrito",
+                lblLat: "Latitud (Auto)",
+                lblLng: "Longitud (Auto)",
+                lblQuery: "Pregunta / Área de Enfoque",
+                btnText: "Generar Carta Swiss Ephemeris y Análisis IA",
+                resultTitle: "Resultado del Análisis",
+                datePlaceholder: "DD/MM/AAAA",
+                dateMask: "DD/MM/YYYY"
+            },
+            fr: {
+                subTitle: "Console d'Agent Autonome",
+                formTitle: "Thème Astral & Analyse Mystique",
+                lblTitle: "Nom Complet / Client",
+                lblDate: "Date de Naissance",
+                lblTime: "Heure de Naissance",
+                lblCountry: "Pays de Naissance",
+                lblCity: "Ville de Naissance",
+                lblDistrict: "District",
+                lblLat: "Latitude (Auto)",
+                lblLng: "Longitude (Auto)",
+                lblQuery: "Question / Domaine d'Intérêt",
+                btnText: "Générer la Carte Swiss Ephemeris & Analyse IA",
+                resultTitle: "Résultat de l'Analyse",
+                datePlaceholder: "JJ/MM/AAAA",
+                dateMask: "DD/MM/YYYY"
+            },
+            pt: {
+                subTitle: "Consola de Agente Autónomo",
+                formTitle: "Mapa Astral e Análise Mística",
+                lblTitle: "Nome Completo / Cliente",
+                lblDate: "Data de Nascimento",
+                lblTime: "Hora de Nascimento",
+                lblCountry: "País de Nascimento",
+                lblCity: "Cidade de Nascimento",
+                lblDistrict: "Distrito",
+                lblLat: "Latitude (Auto)",
+                lblLng: "Longitude (Auto)",
+                lblQuery: "Pergunta / Área de Foco",
+                btnText: "Gerar Mapa Swiss Ephemeris e Análise IA",
+                resultTitle: "Resultado da Análise",
+                datePlaceholder: "DD/MM/AAAA",
+                dateMask: "DD/MM/YYYY"
+            },
+            ru: {
+                subTitle: "Консоль Автономного Агента",
+                formTitle: "Натальная Карта и Мистический Анализ",
+                lblTitle: "ФИО / Клиент",
+                lblDate: "Дата Рождения",
+                lblTime: "Время Рождения",
+                lblCountry: "Страна Рождения",
+                lblCity: "Город Рождения",
+                lblDistrict: "Район",
+                lblLat: "Широта (Авто)",
+                lblLng: "Долгота (Авто)",
+                lblQuery: "Вопрос / Область Фокуса",
+                btnText: "Рассчитать Карту Swiss Ephemeris и ИИ Анализ",
+                resultTitle: "Результат Анализа",
+                datePlaceholder: "ДД.ММ.ГГГГ",
+                dateMask: "DD.MM.YYYY"
+            },
+            ar: {
+                subTitle: "لوحة التحكم للوكيل المستقل",
+                formTitle: "خريطة المولد والتحليل الفلكي",
+                lblTitle: "الاسم الكامل / العميل",
+                lblDate: "تاريخ الميلاد",
+                lblTime: "وقت الميلاد",
+                lblCountry: "بلد الميلاد",
+                lblCity: "مدينة الميلاد",
+                lblDistrict: "المنطقة / الحي",
+                lblLat: "خط العرض (تلقائي)",
+                lblLng: "خط الطول (تلقائي)",
+                lblQuery: "السؤال / مجال التركيز",
+                btnText: "استخراج خريطة Swiss Ephemeris والتحليل بالذكاء الاصطناعي",
+                resultTitle: "نتيجة التحليل",
+                datePlaceholder: "DD/MM/YYYY",
+                dateMask: "DD/MM/YYYY"
             }
         };
+
+        function formatDateInput(input) {
+            const lang = document.getElementById("langSelect").value;
+            const maskType = i18n[lang]?.dateMask || "DD.MM.YYYY";
+            let v = input.value.replace(/\D/g, '');
+            if (v.length > 8) v = v.substring(0, 8);
+
+            const sep = maskType.includes('/') ? '/' : '.';
+
+            if (v.length > 4) {
+                input.value = v.substring(0, 2) + sep + v.substring(2, 4) + sep + v.substring(4);
+            } else if (v.length > 2) {
+                input.value = v.substring(0, 2) + sep + v.substring(2);
+            } else {
+                input.value = v;
+            }
+        }
+
+        function formatTimeInput(input) {
+            let v = input.value.replace(/\D/g, '');
+            if (v.length > 4) v = v.substring(0, 4);
+            
+            if (v.length > 2) {
+                input.value = v.substring(0, 2) + ':' + v.substring(2);
+            } else {
+                input.value = v;
+            }
+        }
 
         function changeLanguage() {
             const lang = document.getElementById("langSelect").value;
@@ -374,6 +535,11 @@ async def read_root():
             for (const key in dict) {
                 const el = document.getElementById(key);
                 if (el) el.innerText = dict[key];
+            }
+
+            const dateInput = document.getElementById("astroDateInput");
+            if (dateInput && dict.datePlaceholder) {
+                dateInput.placeholder = dict.datePlaceholder;
             }
         }
 
