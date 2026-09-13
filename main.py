@@ -15,7 +15,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="MYSTIC THREAD STUDIO - Multi-Agent System", version="7.0")
+app = FastAPI(title="MYSTIC THREAD STUDIO - Multi-Agent System", version="7.1")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -61,13 +61,13 @@ def calculate_name_number(name_str: str) -> int:
 
 def get_ai_response(prompt: str) -> str:
     if not OPENAI_API_KEY:
-        return "<p class='text-danger'>OPENAI_API_KEY tanımlı değil. Ortam değişkenlerinizi kontrol edin.</p>"
+        return "<p class='text-danger fw-bold'>OPENAI_API_KEY tanımlı değil. Ortam değişkenlerinizi kontrol edin.</p>"
     try:
         llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7, openai_api_key=OPENAI_API_KEY)
         response = llm.invoke(prompt)
-        return response.content if response and response.content else "<p class='text-warning'>Yanıt oluşturulamadı.</p>"
+        return response.content if response and response.content else "<p class='text-warning fw-bold'>Yanıt oluşturulamadı.</p>"
     except Exception as e:
-        return f"<p class='text-danger'>Yapay Zeka Hatası: {str(e)}</p>"
+        return f"<p class='text-danger fw-bold'>Yapay Zeka Hatası: {str(e)}</p>"
 
 class AgentRequest(BaseModel):
     agent_type: str = Field("ceo", max_length=20)
@@ -101,13 +101,11 @@ def astro_agent(req: AgentRequest) -> str:
     asc_sign = SIGNS[int(ascendant_degree // 30)]
 
     planets_data = []
-    planet_degrees = {}
     bodies = {"Güneş": swe.SUN, "Ay": swe.MOON, "Merkür": swe.MERCURY, "Venüs": swe.VENUS, "Mars": swe.MARS}
     for name, body_id in bodies.items():
         res, _ = swe.calc_ut(julian_day, body_id)
         deg = round(res[0], 2)
         sign = SIGNS[int(deg // 30)]
-        planet_degrees[name] = deg
         planets_data.append(f"{name}: {sign} ({deg % 30:.2f}°)")
 
     prompt = f"""
@@ -159,7 +157,6 @@ def dream_agent(req: AgentRequest) -> str:
 
 # --- 5. CEO / ORKESTRASYON AJANI (MULTI-AGENT SYNTHESIS) ---
 def ceo_agent_orchestrator(req: AgentRequest) -> str:
-    # CEO arka planda diğer 4 ajanın görüşünü alır ve sentezler
     astro_res = astro_agent(req)
     tarot_res = tarot_agent(req)
     num_res = numerology_agent(req)
@@ -220,65 +217,115 @@ async def read_root():
         <title>MYSTIC THREAD STUDIO - Holding Konsolu</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
-            body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-            .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; }
-            .agent-card { cursor: pointer; border: 2px solid #334155; transition: all 0.3s ease; }
-            .agent-card:hover { border-color: #6366f1; transform: translateY(-2px); }
-            .agent-card.active { border-color: #6366f1; background-color: #334155; box-shadow: 0 0 15px rgba(99, 102, 241, 0.3); }
-            .form-control { background-color: #0f172a; border: 1px solid #334155; color: #fff; }
-            .form-control:focus { background-color: #0f172a; color: #fff; border-color: #6366f1; box-shadow: none; }
-            .btn-primary { background-color: #6366f1; border: none; font-weight: 600; }
-            .btn-primary:hover { background-color: #4f46e5; }
+            body { 
+                background-color: #ffffff; 
+                color: #1e293b; 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            }
+            .card { 
+                background-color: #ffffff; 
+                border: 1px solid #cbd5e1; 
+                border-radius: 12px; 
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+            .agent-card { 
+                cursor: pointer; 
+                border: 2px solid #cbd5e1; 
+                transition: all 0.3s ease; 
+                background-color: #f8fafc;
+            }
+            .agent-card:hover { 
+                border-color: #6366f1; 
+                transform: translateY(-2px); 
+                background-color: #ffffff;
+            }
+            .agent-card.active { 
+                border-color: #6366f1; 
+                background-color: #eeefff; 
+                box-shadow: 0 0 12px rgba(99, 102, 241, 0.25); 
+            }
+            .form-label {
+                font-weight: 600;
+                color: #0f172a;
+            }
+            .form-control { 
+                background-color: #ffffff; 
+                border: 1px solid #cbd5e1; 
+                color: #0f172a; 
+                font-weight: 500;
+            }
+            .form-control:focus { 
+                background-color: #ffffff; 
+                color: #0f172a; 
+                border-color: #6366f1; 
+                box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25); 
+            }
+            .btn-primary { 
+                background-color: #6366f1; 
+                border: none; 
+                font-weight: 600; 
+            }
+            .btn-primary:hover { 
+                background-color: #4f46e5; 
+            }
+            #resultCard {
+                background-color: #f8fafc;
+                border: 1px solid #cbd5e1;
+                color: #0f172a;
+            }
+            .text-indigo {
+                color: #4f46e5 !important;
+            }
         </style>
     </head>
     <body class="container py-4">
         
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
             <div>
                 <h2 class="fw-bold text-indigo mb-0">✨ MYSTIC THREAD STUDIO</h2>
-                <small class="text-muted">Holding Otonom Multi-Agent Konsolu v7.0</small>
+                <small class="text-secondary fw-semibold">Holding Otonom Multi-Agent Konsolu v7.1</small>
             </div>
-            <span class="badge bg-success px-3 py-2">5/5 AGENTS ONLINE</span>
+            <span class="badge bg-success px-3 py-2 fs-6">5/5 AGENTS ONLINE</span>
         </div>
 
         <!-- AJAN SEÇİM ALANI -->
-        <h6 class="mb-3 text-muted">Aktif Çalıştırılacak Ajanı Seçin:</h6>
+        <h6 class="mb-3 text-secondary fw-bold">Aktif Çalıştırılacak Ajanı Seçin:</h6>
         <div class="row mb-4">
             <div class="col-md-2 mb-2">
                 <div class="card p-3 agent-card active" onclick="selectAgent('ceo', this)">
-                    <h6 class="fw-bold mb-1">👑 CEO Ajanı</h6>
-                    <small class="text-muted">Multi-Agent Sentez</small>
+                    <h6 class="fw-bold mb-1 text-dark">👑 CEO Ajanı</h6>
+                    <small class="text-secondary">Multi-Agent Sentez</small>
                 </div>
             </div>
             <div class="col-md-2 mb-2">
                 <div class="card p-3 agent-card" onclick="selectAgent('astro', this)">
-                    <h6 class="fw-bold mb-1">🪐 Astroloji</h6>
-                    <small class="text-muted">Ephemeris Haritası</small>
+                    <h6 class="fw-bold mb-1 text-dark">🪐 Astroloji</h6>
+                    <small class="text-secondary">Ephemeris Haritası</small>
                 </div>
             </div>
             <div class="col-md-2 mb-2">
                 <div class="card p-3 agent-card" onclick="selectAgent('tarot', this)">
-                    <h6 class="fw-bold mb-1">🃏 Tarot</h6>
-                    <small class="text-muted">Kart Kehaneti</small>
+                    <h6 class="fw-bold mb-1 text-dark">🃏 Tarot</h6>
+                    <small class="text-secondary">Kart Kehaneti</small>
                 </div>
             </div>
             <div class="col-md-3 mb-2">
                 <div class="card p-3 agent-card" onclick="selectAgent('numerology', this)">
-                    <h6 class="fw-bold mb-1">🔢 Numeroloji</h6>
-                    <small class="text-muted">Kader & İsim Sayısı</small>
+                    <h6 class="fw-bold mb-1 text-dark">🔢 Numeroloji</h6>
+                    <small class="text-secondary">Kader & İsim Sayısı</small>
                 </div>
             </div>
             <div class="col-md-3 mb-2">
                 <div class="card p-3 agent-card" onclick="selectAgent('dream', this)">
-                    <h6 class="fw-bold mb-1">🌙 Rüya Tabiri</h6>
-                    <small class="text-muted">Bilinçaltı Analizi</small>
+                    <h6 class="fw-bold mb-1 text-dark">🌙 Rüya Tabiri</h6>
+                    <small class="text-secondary">Bilinçaltı Analizi</small>
                 </div>
             </div>
         </div>
 
         <!-- FORM ALANI -->
         <div class="card p-4">
-            <h4 class="mb-4" id="formTitle">👑 CEO Ajanı - Multi-Agent Bütüncül Sentez</h4>
+            <h4 class="mb-4 text-indigo fw-bold" id="formTitle">👑 CEO Ajanı - Multi-Agent Bütüncül Sentez</h4>
             <form onsubmit="handleFormSubmit(event)">
                 <input type="hidden" id="selectedAgent" value="ceo">
                 
@@ -313,15 +360,15 @@ async def read_root():
                     <textarea id="queryInput" class="form-control" rows="3">Gelecek dönemdeki kariyer ve finansal fırsatlarım nelerdir?</textarea>
                 </div>
 
-                <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold">
+                <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold fs-5">
                     <span id="btnText">Ajan Analizini Başlat</span>
                     <span id="btnSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                 </button>
             </form>
 
-            <div id="resultCard" class="mt-4 p-3 rounded d-none" style="background-color: #0f172a; border: 1px solid #334155;">
-                <h5 class="text-indigo mb-3">Analiz Sonucu</h5>
-                <div id="resultBox"></div>
+            <div id="resultCard" class="mt-4 p-4 rounded d-none">
+                <h5 class="text-indigo fw-bold mb-3 border-bottom pb-2">Analiz Sonucu</h5>
+                <div id="resultBox" class="lh-lg"></div>
             </div>
         </div>
 
