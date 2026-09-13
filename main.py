@@ -89,11 +89,11 @@ HTML_DASHBOARD = """
                             <h5 class="mb-3 text-light">Doğum Haritası ve Mistik Analiz İsteği</h5>
                             <form id="astroForm">
                                 <div class="row g-3 mb-3">
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
                                         <label class="form-label text-secondary">Ad Soyad / Danışan</label>
                                         <input type="text" id="nameInput" class="form-control" value="Danışan" required>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
                                         <label class="form-label text-secondary">Doğum Tarihi</label>
                                         <input type="date" id="dateInput" class="form-control" value="1995-05-15" required>
                                     </div>
@@ -102,12 +102,24 @@ HTML_DASHBOARD = """
                                         <input type="time" id="timeInput" class="form-control" value="14:30" required>
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label text-secondary">Enlem (Lat)</label>
-                                        <input type="number" step="any" id="latInput" class="form-control" value="41.0082" required>
+                                        <label class="form-label text-secondary">Doğum Ülkesi</label>
+                                        <input type="text" id="countryInput" class="form-control" value="Türkiye" required>
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label text-secondary">Boylam (Lon)</label>
-                                        <input type="number" step="any" id="lonInput" class="form-control" value="28.9784" required>
+                                        <label class="form-label text-secondary">Doğum İli (Şehir)</label>
+                                        <input type="text" id="cityInput" class="form-control" value="İstanbul" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary">Doğum İlçesi</label>
+                                        <input type="text" id="districtInput" class="form-control" value="Kadıköy">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label text-secondary">Enlem (Manuel / Opsiyonel)</label>
+                                        <input type="number" step="any" id="latInput" class="form-control" value="41.0082">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label text-secondary">Boylam (Manuel / Opsiyonel)</label>
+                                        <input type="number" step="any" id="lonInput" class="form-control" value="28.9784">
                                     </div>
                                     <div class="col-12">
                                         <label class="form-label text-secondary">Odaklanılacak Soru / Konu</label>
@@ -298,6 +310,9 @@ HTML_DASHBOARD = """
             const name = document.getElementById('nameInput').value;
             const date = document.getElementById('dateInput').value;
             const time = document.getElementById('timeInput').value;
+            const country = document.getElementById('countryInput').value;
+            const city = document.getElementById('cityInput').value;
+            const district = document.getElementById('districtInput').value;
             const lat = parseFloat(document.getElementById('latInput').value) || 41.0082;
             const lon = parseFloat(document.getElementById('lonInput').value) || 28.9784;
             const query = document.getElementById('astroQueryInput').value;
@@ -314,7 +329,7 @@ HTML_DASHBOARD = """
                 const response = await fetch('/analyze_astro', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-API-KEY': 'mistik-secret-key-2026' },
-                    body: JSON.stringify({ name, birth_date: date, birth_time: time, lat, lon, query })
+                    body: JSON.stringify({ name, birth_date: date, birth_time: time, country, city, district, lat, lon, query })
                 });
 
                 if (response.ok) {
@@ -538,6 +553,11 @@ def analyze_astro():
     name = data.get("name", "Danışan")
     birth_date = data.get("birth_date", "1995-05-15")
     birth_time = data.get("birth_time", "14:30")
+    
+    country = data.get("country", "Türkiye")
+    city = data.get("city", "İstanbul")
+    district = data.get("district", "Kadıköy")
+    
     lat = float(data.get("lat", 41.0082))
     lon = float(data.get("lon", 28.9784))
     user_query = data.get("query", "Genel harita analizi ve potansiyeller.")
@@ -554,15 +574,17 @@ def analyze_astro():
 
         astrolog_agent = Agent(
             role="Kıdemli Mistik Astrolog ve Doğum Haritası Yorumcusu",
-            goal="Swiss Ephemeris verilerini derin mistik sembolizmle kişiye özel yorumlamak.",
-            backstory="Sen Mystic Thread Studio'nun en tecrübeli astrologusun. Gezegen konumlarını analiz eder, danışanın ruhsal potansiyelini açıklarsın.",
+            goal="Swiss Ephemeris verilerini doğum yeri ve zamanını dikkate alarak derin mistik sembolizmle kişiye özel yorumlamak.",
+            backstory="Sen Mystic Thread Studio'nun en tecrübeli astrologusun. Gezegen konumlarını ve ev yerleşimlerini hassasiyetle analiz eder, danışanın ruhsal ve dünyevi potansiyelini açıklarsın.",
             verbose=False,
             allow_delegation=False,
             llm="gpt-4o-mini"
         )
 
+        location_str = f"{district}, {city}, {country}" if district else f"{city}, {country}"
+
         task_interpretation = Task(
-            description=f"Danışan: {name}\nHarita Verisi: {natal_chart}\nSoru: '{user_query}'\n\nDetaylı doğum haritası ve gelecek potansiyelleri analizi yaz.",
+            description=f"Danışan: {name}\nDoğum Yeri: {location_str}\nHarita Verisi (Swiss Ephemeris): {natal_chart}\nSoru: '{user_query}'\n\nLokasyonu ve gezegen konumlarını dikkate alarak detaylı doğum haritası ve gelecek potansiyelleri analizi yaz.",
             expected_output="Derin mistik doğum haritası analizi.",
             agent=astrolog_agent
         )
@@ -570,7 +592,7 @@ def analyze_astro():
         crew = Crew(agents=[astrolog_agent], tasks=[task_interpretation], process=Process.sequential, verbose=False)
         crew.kickoff()
 
-        prompt_desc = f"astrological natal chart art, {natal_chart.get('ascendant', {}).get('sign', 'Aries')} ascendant, glowing constellation background, 8k"
+        prompt_desc = f"astrological natal chart art, {natal_chart.get('ascendant', {}).get('sign', 'Aries')} ascendant, celestial sky above {city}, glowing constellation background, 8k"
         try:
             client = OpenAI(api_key=openai_key)
             img_res = client.images.generate(model="dall-e-3", prompt=prompt_desc, n=1, size="1024x1024")
@@ -581,6 +603,13 @@ def analyze_astro():
 
         return jsonify({
             "natal_chart_data": natal_chart,
+            "location_info": {
+                "country": country,
+                "city": city,
+                "district": district,
+                "latitude": lat,
+                "longitude": lon
+            },
             "astrology_interpretation": str(task_interpretation.output),
             "generated_image_url": generated_image_url
         }), 200
