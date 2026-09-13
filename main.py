@@ -8,17 +8,15 @@ from pydantic import BaseModel, Field
 import swisseph as swe
 from geopy.geocoders import Nominatim
 
-# Rate Limiter (Slowapi) Güvenlik Entegrasyonu
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.0-SECURE")
+app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.1-SECURE")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# 1. GÜVENLİK KATMANI: Strict CORS Politikası
 ALLOWED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
@@ -28,13 +26,12 @@ ALLOWED_ORIGINS = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Geliştirme ortamı esnekliği, canlıda ALLOWED_ORIGINS ile kısıtlanabilir
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-# 2. GÜVENLİK KATMANI: Security Headers Middleware (XSS, Clickjacking, MIME-Sniffing)
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -43,9 +40,8 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-geolocator = Nominatim(user_agent="mystic_thread_studio_v3_secure")
+geolocator = Nominatim(user_agent="mystic_thread_studio_v3_1")
 
-# 3. GÜVENLİK KATMANI: Pydantic Input Validation (Veri Uzunluğu ve Limit Kontrolleri)
 class AstroRequest(BaseModel):
     name: Optional[str] = Field("Danışan", max_length=100)
     birth_date: str = Field(..., max_length=15)
@@ -58,7 +54,6 @@ class AstroRequest(BaseModel):
     question: Optional[str] = Field("", max_length=500)
     lang: Optional[str] = Field("tr", max_length=5)
 
-# 4. GÜVENLİK KATMANI: Rate Limited Endpoint (Saniyede/Dakikada Bot Saldırısı Engelleyici)
 @app.post("/analyze_astro")
 @limiter.limit("10/minute")
 async def analyze_astro(request: Request, req: AstroRequest):
@@ -111,7 +106,6 @@ async def analyze_astro(request: Request, req: AstroRequest):
                         "Yay / Sagittarius", "Oğlak / Capricorn", "Kova / Aquarius", "Balık / Pisces"]
         asc_sign = zodiac_signs[int(ascendant_degree // 30)]
 
-        # XSS Sanitization (Girdi temizliği)
         clean_name = req.name.replace("<", "&lt;").replace(">", "&gt;")
         clean_question = req.question.replace("<", "&lt;").replace(">", "&gt;")
 
@@ -138,7 +132,6 @@ async def analyze_astro(request: Request, req: AstroRequest):
         }
 
     except Exception as e:
-        # 5. GÜVENLİK KATMANI: Güvenli Hata Maskeleme
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Hesaplama sırasında güvenlik / sistem hatası oluştu."
@@ -162,6 +155,32 @@ async def read_root():
             .form-control:focus, .form-select:focus { background-color: #0f172a; color: #fff; border-color: #6366f1; box-shadow: none; }
             .btn-primary { background-color: #6366f1; border: none; font-weight: 600; padding: 12px; }
             .btn-primary:hover { background-color: #4f46e5; }
+            
+            /* Dynamic Dropdown Style */
+            .autocomplete-wrapper { position: relative; }
+            .autocomplete-results {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                z-index: 1000;
+                background-color: #1e293b;
+                border: 1px solid #6366f1;
+                border-top: none;
+                max-height: 200px;
+                overflow-y: auto;
+                border-bottom-left-radius: 8px;
+                border-bottom-right-radius: 8px;
+            }
+            .autocomplete-item {
+                padding: 8px 12px;
+                cursor: pointer;
+                color: #f8fafc;
+                font-size: 0.9rem;
+            }
+            .autocomplete-item:hover {
+                background-color: #6366f1;
+            }
         </style>
     </head>
     <body class="container py-4">
@@ -211,17 +230,19 @@ async def read_root():
                 </div>
 
                 <div class="row">
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-4 mb-3 autocomplete-wrapper">
                         <label class="form-label" id="lblCountry">Doğum Ülkesi</label>
-                        <input type="text" id="astroCountryInput" class="form-control" value="Türkiye" onblur="fetchCoordinates()" required>
+                        <input type="text" id="astroCountryInput" class="form-control" value="Türkiye" required>
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-4 mb-3 autocomplete-wrapper">
                         <label class="form-label" id="lblCity">Doğum İli (Şehir)</label>
-                        <input type="text" id="astroCityInput" class="form-control" value="İstanbul" onblur="fetchCoordinates()" required>
+                        <input type="text" id="astroCityInput" class="form-control" value="İstanbul" oninput="searchLocation('city')" autocomplete="off" required>
+                        <div id="cityResults" class="autocomplete-results d-none"></div>
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-4 mb-3 autocomplete-wrapper">
                         <label class="form-label" id="lblDistrict">Doğum İlçesi</label>
-                        <input type="text" id="astroDistrictInput" class="form-control" value="Kadıköy" onblur="fetchCoordinates()" required>
+                        <input type="text" id="astroDistrictInput" class="form-control" value="Kadıköy" oninput="searchLocation('district')" autocomplete="off" required>
+                        <div id="districtResults" class="autocomplete-results d-none"></div>
                     </div>
                 </div>
 
@@ -357,42 +378,67 @@ async def read_root():
             }
         }
 
-        async function fetchCoordinates() {
-            const country = document.getElementById("astroCountryInput")?.value.trim() || "Türkiye";
-            const city = document.getElementById("astroCityInput")?.value.trim() || "";
-            const district = document.getElementById("astroDistrictInput")?.value.trim() || "";
+        let debounceTimer;
+        function searchLocation(type) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                const country = document.getElementById("astroCountryInput")?.value.trim() || "Türkiye";
+                const cityInput = document.getElementById("astroCityInput");
+                const districtInput = document.getElementById("astroDistrictInput");
+                const resultsDiv = document.getElementById(type === 'city' ? "cityResults" : "districtResults");
 
-            if (!city) return;
-
-            const queryLocation = `${district} ${city} ${country}`.trim();
-            try {
-                const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryLocation)}`);
-                const geoData = await geoRes.json();
-
-                if (geoData && geoData.length > 0) {
-                    document.getElementById("astroLatInput").value = parseFloat(geoData[0].lat).toFixed(4);
-                    document.getElementById("astroLngInput").value = parseFloat(geoData[0].lon).toFixed(4);
+                let query = "";
+                if (type === 'city') {
+                    if (cityInput.value.length < 2) { resultsDiv.classList.add("d-none"); return; }
+                    query = `${cityInput.value}, ${country}`;
                 } else {
-                    const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city + " " + country)}`);
-                    const fallbackData = await fallbackRes.json();
-                    if (fallbackData && fallbackData.length > 0) {
-                        document.getElementById("astroLatInput").value = parseFloat(fallbackData[0].lat).toFixed(4);
-                        document.getElementById("astroLngInput").value = parseFloat(fallbackData[0].lon).toFixed(4);
-                    }
+                    if (districtInput.value.length < 2) { resultsDiv.classList.add("d-none"); return; }
+                    query = `${districtInput.value}, ${cityInput.value}, ${country}`;
                 }
-            } catch (err) {
-                console.warn("Geo Error:", err);
-            }
+
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
+                    const data = await res.json();
+
+                    if (data && data.length > 0) {
+                        resultsDiv.innerHTML = "";
+                        resultsDiv.classList.remove("d-none");
+
+                        data.forEach(item => {
+                            const div = document.createElement("div");
+                            div.className = "autocomplete-item";
+                            div.innerText = item.display_name;
+                            div.onclick = () => {
+                                if (type === 'city') {
+                                    cityInput.value = item.display_name.split(",")[0];
+                                } else {
+                                    districtInput.value = item.display_name.split(",")[0];
+                                }
+                                document.getElementById("astroLatInput").value = parseFloat(item.lat).toFixed(4);
+                                document.getElementById("astroLngInput").value = parseFloat(item.lon).toFixed(4);
+                                resultsDiv.classList.add("d-none");
+                            };
+                            resultsDiv.appendChild(div);
+                        });
+                    } else {
+                        resultsDiv.classList.add("d-none");
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }, 300);
         }
 
-        window.addEventListener("DOMContentLoaded", () => {
-            fetchCoordinates();
+        document.addEventListener("click", function (e) {
+            if (!e.target.closest(".autocomplete-wrapper")) {
+                document.getElementById("cityResults")?.classList.add("d-none");
+                document.getElementById("districtResults")?.classList.add("d-none");
+            }
         });
 
         async function handleAstroSubmit(event) {
             if (event) event.preventDefault();
 
-            const btnText = document.getElementById("astroBtnText");
             const btnSpinner = document.getElementById("astroBtnSpinner");
             const submitBtn = document.getElementById("astroSubmitBtn");
             const resultCard = document.getElementById("resultCard");
