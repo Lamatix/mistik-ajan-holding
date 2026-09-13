@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from typing import Optional
+from typing import Optional, List, Dict
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,11 +15,10 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="MYSTIC THREAD STUDIO", version="5.1")
+app = FastAPI(title="MYSTIC THREAD STUDIO - Multi-Agent System", version="7.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS Yapılandırması
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,22 +35,33 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-geolocator = Nominatim(user_agent="mystic_thread_studio_v5")
+geolocator = Nominatim(user_agent="mystic_thread_studio_v7")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 SIGNS = ["Koç", "Boğa", "İkizler", "Yengeç", "Aslan", "Başak", "Terazi", "Akrep", "Yay", "Oğlak", "Kova", "Balık"]
 
+# --- HESAPLAMA YARDIMCILARI ---
 def calculate_life_path_number(birth_date_str: str) -> int:
-    """Doğum tarihinden Numerolojik Yaşam Yolu Sayısını hesaplar."""
     digits = [int(d) for d in re.findall(r"\d", birth_date_str)]
     total = sum(digits)
-    while total > 9 and total not in [11, 22, 33]:  # Üstat sayıları korur
+    while total > 9 and total not in [11, 22, 33]:
         total = sum(int(d) for d in str(total))
     return total
 
+def calculate_name_number(name_str: str) -> int:
+    char_map = {
+        'a':1, 'j':1, 's':1, 'ş':1, 'b':2, 'k':2, 't':2, 'c':3, 'ç':3, 'l':3, 'u':3, 'ü':3,
+        'd':4, 'm':4, 'v':4, 'e':5, 'n':5, 'w':5, 'f':6, 'o':6, 'ö':6, 'x':6,
+        'g':7, 'ğ':7, 'p':7, 'y':7, 'h':8, 'q':8, 'z':8, 'i':9, 'ı':9, 'r':9
+    }
+    total = sum(char_map.get(c.lower(), 0) for c in name_str if c.isalpha())
+    while total > 9 and total not in [11, 22, 33]:
+        total = sum(int(d) for d in str(total))
+    return total if total > 0 else 1
+
 def get_ai_response(prompt: str) -> str:
     if not OPENAI_API_KEY:
-        return "<p class='text-danger'>OPENAI_API_KEY tanımlı değil. Lütfen ortam değişkenlerinizi kontrol edin.</p>"
+        return "<p class='text-danger'>OPENAI_API_KEY tanımlı değil. Ortam değişkenlerinizi kontrol edin.</p>"
     try:
         llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7, openai_api_key=OPENAI_API_KEY)
         response = llm.invoke(prompt)
@@ -60,106 +70,142 @@ def get_ai_response(prompt: str) -> str:
         return f"<p class='text-danger'>Yapay Zeka Hatası: {str(e)}</p>"
 
 class AgentRequest(BaseModel):
-    agent_type: str = Field("astro", max_length=20)
+    agent_type: str = Field("ceo", max_length=20)
     name: Optional[str] = Field("Danışan", max_length=100)
     birth_date: str = Field(..., max_length=15)
     birth_time: Optional[str] = Field("12:00", max_length=10)
     country: Optional[str] = Field("Türkiye", max_length=60)
     city: Optional[str] = Field("İstanbul", max_length=60)
-    district: Optional[str] = Field("", max_length=60)
-    latitude: Optional[float] = Field(None)
-    longitude: Optional[float] = Field(None)
     question: Optional[str] = Field("", max_length=500)
-    lang: Optional[str] = Field("tr", max_length=5)
+
+# --- 1. ASTROLOJİ AJANI ---
+def astro_agent(req: AgentRequest) -> str:
+    lat, lng = None, None
+    if req.city and req.country:
+        loc = geolocator.geocode(f"{req.city}, {req.country}")
+        if loc:
+            lat, lng = loc.latitude, loc.longitude
+    if lat is None or lng is None:
+        lat, lng = 41.0082, 28.9784
+
+    parts = [int(p) for p in re.sub(r"[^\d]", " ", req.birth_date).split() if p.isdigit()]
+    day, month, year = (parts[0], parts[1], parts[2]) if len(parts) == 3 else (15, 5, 1995)
+    
+    clean_time = req.birth_time.replace(".", ":")
+    t_parts = [int(p) for p in clean_time.split(":") if p.isdigit()]
+    hour, minute = (t_parts[0], t_parts[1]) if len(t_parts) >= 2 else (12, 0)
+
+    julian_day = swe.julday(year, month, day, hour + (minute / 60.0))
+    cusps, ascmc = swe.houses(julian_day, lat, lng, b'P')
+    ascendant_degree = round(ascmc[0], 2)
+    asc_sign = SIGNS[int(ascendant_degree // 30)]
+
+    planets_data = []
+    planet_degrees = {}
+    bodies = {"Güneş": swe.SUN, "Ay": swe.MOON, "Merkür": swe.MERCURY, "Venüs": swe.VENUS, "Mars": swe.MARS}
+    for name, body_id in bodies.items():
+        res, _ = swe.calc_ut(julian_day, body_id)
+        deg = round(res[0], 2)
+        sign = SIGNS[int(deg // 30)]
+        planet_degrees[name] = deg
+        planets_data.append(f"{name}: {sign} ({deg % 30:.2f}°)")
+
+    prompt = f"""
+    Sen Baş Astrolog Ajanısın.
+    Danışan: {req.name} | Doğum Tarihi/Saati: {req.birth_date} {req.birth_time} | Konum: {req.city}, {req.country}
+    Yükselen Burç: {asc_sign} ({ascendant_degree}°)
+    Gezegen Konumları: {', '.join(planets_data)}
+    Soru/Konu: "{req.question}"
+
+    Lütfen gezegen konumları, ev yerleşimleri ve transit etkilerini dikkate alarak HTML formatında profesyonel astrolojik analiz sun.
+    """
+    return get_ai_response(prompt)
+
+# --- 2. TAROT AJANI ---
+def tarot_agent(req: AgentRequest) -> str:
+    prompt = f"""
+    Sen Tarot ve Kehanet Uzmanı Ajanısın.
+    Danışan: {req.name}
+    Niyet/Soru: "{req.question}"
+
+    3 kartlık (Geçmiş, Şu An, Gelecek) sembolik bir kart açılımı gerçekleştir ve HTML formatında detaylıca yorumla.
+    """
+    return get_ai_response(prompt)
+
+# --- 3. NUMEROLOJİ AJANI ---
+def numerology_agent(req: AgentRequest) -> str:
+    life_path = calculate_life_path_number(req.birth_date)
+    name_number = calculate_name_number(req.name)
+    prompt = f"""
+    Sen Numeroloji Uzmanı Ajanısın.
+    Danışan: {req.name} (İsim Sayısı / Ruh İfadesi: {name_number})
+    Doğum Tarihi: {req.birth_date} (Yaşam Yolu / Kader Sayısı: {life_path})
+    Soru/Detay: "{req.question}"
+
+    Yaşam yolu sayısı ({life_path}) ve isim titreşimi ({name_number}) temelinde potansiyelleri HTML formatında açıklayarak rehberlik sun.
+    """
+    return get_ai_response(prompt)
+
+# --- 4. RÜYA TABİRİ AJANI ---
+def dream_agent(req: AgentRequest) -> str:
+    prompt = f"""
+    Sen Bilinçaltı ve Rüya Analiz Ajanısın.
+    Danışan: {req.name}
+    Anlatılan Rüya: "{req.question}"
+
+    Bu rüyadaki ana sembolleri, psikolojik katmanları ve bilinçaltı mesajlarını HTML formatında çözümle.
+    """
+    return get_ai_response(prompt)
+
+# --- 5. CEO / ORKESTRASYON AJANI (MULTI-AGENT SYNTHESIS) ---
+def ceo_agent_orchestrator(req: AgentRequest) -> str:
+    # CEO arka planda diğer 4 ajanın görüşünü alır ve sentezler
+    astro_res = astro_agent(req)
+    tarot_res = tarot_agent(req)
+    num_res = numerology_agent(req)
+    dream_res = dream_agent(req) if req.question else "Rüya verisi girilmedi."
+
+    synthesis_prompt = f"""
+    Sen Mistik Holding'in CEO Ajanısın (Baş Mistik Rehber).
+    Danışan {req.name} için alt uzmanların (Astroloji, Tarot, Numeroloji, Rüya Tabiri) sunduğu raporlar aşağıdadır.
+
+    --- ASTROLOJİ RAPORU ---
+    {astro_res[:600]}...
+
+    --- TAROT RAPORU ---
+    {tarot_res[:600]}...
+
+    --- NUMEROLOJİ RAPORU ---
+    {num_res[:600]}...
+
+    --- RÜYA & BİLİNÇALTI RAPORU ---
+    {dream_res[:600]}...
+
+    GÖREVİN:
+    Danışanın sorusunu ("{req.question}") odağa alarak bu 4 uzman alanının verilerini üst düzey bir CEO strateji raporunda birleştir.
+    Çelişen durumları dengele, ortak temaları öne çıkar ve Danışan için net bir Mistik Yol Haritası (Executive Action Plan) sun.
+    Yanıtı şık HTML formatında (<h3>, <div class='alert alert-info'>, <ul>, <li>, <strong>) hazırla.
+    """
+    return get_ai_response(synthesis_prompt)
 
 @app.post("/analyze_astro")
 @limiter.limit("10/minute")
-async def analyze_astro(request: Request, req: AgentRequest):
+async def process_agent_request(request: Request, req: AgentRequest):
     try:
-        if req.agent_type == "astro":
-            lat, lng = req.latitude, req.longitude
-            if lat is None or lng is None:
-                loc = geolocator.geocode(f"{req.city}, {req.country}")
-                lat, lng = (loc.latitude, loc.longitude) if loc else (41.0082, 28.9784)
-
-            parts = [int(p) for p in re.sub(r"[^\d]", " ", req.birth_date).split() if p.isdigit()]
-            day, month, year = (parts[0], parts[1], parts[2]) if len(parts) == 3 else (15, 5, 1995)
-            
-            clean_time = req.birth_time.replace(".", ":")
-            t_parts = [int(p) for p in clean_time.split(":") if p.isdigit()]
-            hour, minute = (t_parts[0], t_parts[1]) if len(t_parts) >= 2 else (12, 0)
-
-            julian_day = swe.julday(year, month, day, hour + (minute / 60.0))
-            cusps, ascmc = swe.houses(julian_day, lat, lng, b'P')
-            ascendant_degree = round(ascmc[0], 2)
-            asc_sign = SIGNS[int(ascendant_degree // 30)]
-
-            # Gezegen Konumları Hesaplaması (Swiss Ephemeris)
-            planets_data = []
-            bodies = {
-                "Güneş": swe.SUN,
-                "Ay": swe.MOON,
-                "Merkür": swe.MERCURY,
-                "Venüs": swe.VENUS,
-                "Mars": swe.MARS
-            }
-
-            for name, body_id in bodies.items():
-                res, _ = swe.calc_ut(julian_day, body_id)
-                deg = round(res[0], 2)
-                sign = SIGNS[int(deg // 30)]
-                planets_data.append(f"{name}: {sign} ({deg % 30:.2f}°)")
-
-            planets_summary = ", ".join(planets_data)
-
-            prompt = f"""
-            Sen profesyonel ve bilge bir astrologsun.
-            Danışan Adı: {req.name}
-            Doğum Tarihi/Saati: {req.birth_date} {req.birth_time}
-            Konum: {req.city}, {req.country} (Enlem: {lat}, Boylam: {lng})
-            Yükselen Burç: {asc_sign} ({ascendant_degree}°)
-            Gezegen Konumları: {planets_summary}
-            Soru/Odak Noktası: "{req.question}"
-
-            Lütfen bu astrolojik harita verilerini temel alarak derinlemesine bir analiz yap.
-            Yanıtı temiz HTML formatında (<h3>, <p>, <ul>, <li>, <strong> etiketleriyle) sun.
-            """
-        
+        if req.agent_type == "ceo":
+            analysis = ceo_agent_orchestrator(req)
+        elif req.agent_type == "astro":
+            analysis = astro_agent(req)
         elif req.agent_type == "tarot":
-            prompt = f"""
-            Sen sezgisel ve bilge bir Tarot Uzmanısın.
-            Danışan: {req.name}
-            Niyet/Soru: "{req.question}"
-            
-            Danışan için 3 kartlık (Geçmiş, Şu An, Gelecek) sembolik bir açılım yap ve detaylıca yorumla. Yanıtı temiz HTML formatında sun.
-            """
-
+            analysis = tarot_agent(req)
         elif req.agent_type == "numerology":
-            life_path = calculate_life_path_number(req.birth_date)
-            prompt = f"""
-            Sen uzman bir Numeroloji Danışmanısın.
-            Danışan: {req.name}
-            Doğum Tarihi: {req.birth_date}
-            Hesaplanan Yaşam Yolu / Kader Sayısı: {life_path}
-            Özel İstek/Soru: "{req.question}"
-
-            Danışanın Yaşam Yolu Sayısı ({life_path}) üzerinden karakter potansiyelini, güçlü yönlerini ve yaşam döngülerini detaylıca HTML formatında açıkla.
-            """
-
+            analysis = numerology_agent(req)
         elif req.agent_type == "dream":
-            prompt = f"""
-            Sen bilinçaltı ve rüya sembolleri uzmanısın.
-            Danışan: {req.name}
-            Anlatılan Rüya: "{req.question}"
-
-            Bu rüyadaki ana sembolleri, psikolojik ve mistik katmanları analiz et. Yanıtı HTML formatında düzenli paragraflar halinde ver.
-            """
+            analysis = dream_agent(req)
         else:
-            prompt = f"Danışan {req.name} için genel mistik rehberlik sun: {req.question}"
+            analysis = ceo_agent_orchestrator(req)
 
-        ai_commentary = get_ai_response(prompt)
-        return {"status": "success", "analysis": ai_commentary}
-
+        return {"status": "success", "analysis": analysis}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -179,7 +225,7 @@ async def read_root():
             .agent-card { cursor: pointer; border: 2px solid #334155; transition: all 0.3s ease; }
             .agent-card:hover { border-color: #6366f1; transform: translateY(-2px); }
             .agent-card.active { border-color: #6366f1; background-color: #334155; box-shadow: 0 0 15px rgba(99, 102, 241, 0.3); }
-            .form-control, .form-select { background-color: #0f172a; border: 1px solid #334155; color: #fff; }
+            .form-control { background-color: #0f172a; border: 1px solid #334155; color: #fff; }
             .form-control:focus { background-color: #0f172a; color: #fff; border-color: #6366f1; box-shadow: none; }
             .btn-primary { background-color: #6366f1; border: none; font-weight: 600; }
             .btn-primary:hover { background-color: #4f46e5; }
@@ -190,45 +236,51 @@ async def read_root():
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h2 class="fw-bold text-indigo mb-0">✨ MYSTIC THREAD STUDIO</h2>
-                <small class="text-muted">Holding Otonom Mistik Ajan Konsolu</small>
+                <small class="text-muted">Holding Otonom Multi-Agent Konsolu v7.0</small>
             </div>
-            <span class="badge bg-success px-3 py-2">SYSTEM ONLINE</span>
+            <span class="badge bg-success px-3 py-2">5/5 AGENTS ONLINE</span>
         </div>
 
         <!-- AJAN SEÇİM ALANI -->
         <h6 class="mb-3 text-muted">Aktif Çalıştırılacak Ajanı Seçin:</h6>
         <div class="row mb-4">
-            <div class="col-md-3 mb-2">
-                <div class="card p-3 agent-card active" onclick="selectAgent('astro', this)">
-                    <h6 class="fw-bold mb-1">🪐 Astroloji Ajanı</h6>
-                    <small class="text-muted">Doğum Haritası & Transitler</small>
+            <div class="col-md-2 mb-2">
+                <div class="card p-3 agent-card active" onclick="selectAgent('ceo', this)">
+                    <h6 class="fw-bold mb-1">👑 CEO Ajanı</h6>
+                    <small class="text-muted">Multi-Agent Sentez</small>
                 </div>
             </div>
-            <div class="col-md-3 mb-2">
+            <div class="col-md-2 mb-2">
+                <div class="card p-3 agent-card" onclick="selectAgent('astro', this)">
+                    <h6 class="fw-bold mb-1">🪐 Astroloji</h6>
+                    <small class="text-muted">Ephemeris Haritası</small>
+                </div>
+            </div>
+            <div class="col-md-2 mb-2">
                 <div class="card p-3 agent-card" onclick="selectAgent('tarot', this)">
-                    <h6 class="fw-bold mb-1">🃏 Tarot Ajanı</h6>
-                    <small class="text-muted">Kart Okuma & Kehanet</small>
+                    <h6 class="fw-bold mb-1">🃏 Tarot</h6>
+                    <small class="text-muted">Kart Kehaneti</small>
                 </div>
             </div>
             <div class="col-md-3 mb-2">
                 <div class="card p-3 agent-card" onclick="selectAgent('numerology', this)">
-                    <h6 class="fw-bold mb-1">🔢 Numeroloji Ajanı</h6>
-                    <small class="text-muted">Kader Sayısı & Analiz</small>
+                    <h6 class="fw-bold mb-1">🔢 Numeroloji</h6>
+                    <small class="text-muted">Kader & İsim Sayısı</small>
                 </div>
             </div>
             <div class="col-md-3 mb-2">
                 <div class="card p-3 agent-card" onclick="selectAgent('dream', this)">
-                    <h6 class="fw-bold mb-1">🌙 Rüya Ajanı</h6>
-                    <small class="text-muted">Bilinçaltı & Semboller</small>
+                    <h6 class="fw-bold mb-1">🌙 Rüya Tabiri</h6>
+                    <small class="text-muted">Bilinçaltı Analizi</small>
                 </div>
             </div>
         </div>
 
         <!-- FORM ALANI -->
         <div class="card p-4">
-            <h4 class="mb-4" id="formTitle">Doğum Haritası ve Mistik Analiz İsteği</h4>
+            <h4 class="mb-4" id="formTitle">👑 CEO Ajanı - Multi-Agent Bütüncül Sentez</h4>
             <form onsubmit="handleFormSubmit(event)">
-                <input type="hidden" id="selectedAgent" value="astro">
+                <input type="hidden" id="selectedAgent" value="ceo">
                 
                 <div class="row">
                     <div class="col-md-4 mb-3">
@@ -257,8 +309,8 @@ async def read_root():
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label" id="queryLabel">Odaklanılacak Soru / Konu</label>
-                    <textarea id="queryInput" class="form-control" rows="3">Kariyer ve potansiyel fırsatlarım yönünde potansiyelim nedir?</textarea>
+                    <label class="form-label" id="queryLabel">Soru / Niyet / Rüya Detayı</label>
+                    <textarea id="queryInput" class="form-control" rows="3">Gelecek dönemdeki kariyer ve finansal fırsatlarım nelerdir?</textarea>
                 </div>
 
                 <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold">
@@ -280,31 +332,11 @@ async def read_root():
             document.getElementById('selectedAgent').value = type;
 
             const title = document.getElementById('formTitle');
-            const timeGrp = document.getElementById('timeGroup');
-            const locGrp = document.getElementById('locationGroup');
-            const qLbl = document.getElementById('queryLabel');
-
-            if (type === 'astro') {
-                title.innerText = "Doğum Haritası ve Mistik Analiz İsteği";
-                timeGrp.style.display = "block";
-                locGrp.style.display = "flex";
-                qLbl.innerText = "Odaklanılacak Soru / Konu";
-            } else if (type === 'tarot') {
-                title.innerText = "Tarot Kart Açılımı ve Gelecek Analizi";
-                timeGrp.style.display = "none";
-                locGrp.style.display = "none";
-                qLbl.innerText = "Niyetiniz veya Öğrenmek İstediğiniz Konu";
-            } else if (type === 'numerology') {
-                title.innerText = "Numeroloji & Kader Sayısı Analizi";
-                timeGrp.style.display = "none";
-                locGrp.style.display = "none";
-                qLbl.innerText = "Özel İsteğiniz Varsa Belirtin (Opsiyonel)";
-            } else if (type === 'dream') {
-                title.innerText = "Rüya Tabiri ve Sembol Okumaları";
-                timeGrp.style.display = "none";
-                locGrp.style.display = "none";
-                qLbl.innerText = "Gördüğünüz Rüyayı Detaylıca Yazın";
-            }
+            if (type === 'ceo') title.innerText = "👑 CEO Ajanı - Multi-Agent Bütüncül Sentez";
+            else if (type === 'astro') title.innerText = "🪐 Astroloji Ajanı - Doğum Haritası Analizi";
+            else if (type === 'tarot') title.innerText = "🃏 Tarot Ajanı - Kart Açılımı";
+            else if (type === 'numerology') title.innerText = "🔢 Numeroloji Ajanı - Kader Sayısı";
+            else if (type === 'dream') title.innerText = "🌙 Rüya Ajanı - Bilinçaltı Analizi";
         }
 
         async function handleFormSubmit(e) {
@@ -315,20 +347,20 @@ async def read_root():
             const resultCard = document.getElementById('resultCard');
             const resultBox = document.getElementById('resultBox');
 
+            const agent = document.getElementById('selectedAgent').value;
             submitBtn.disabled = true;
             btnSpinner.classList.remove('d-none');
-            btnText.innerText = "Ajan Hesaplanıyor...";
+            btnText.innerText = agent === 'ceo' ? "CEO Bütün Ajanları Çalıştırıyor..." : "Ajan Analiz Ediyor...";
 
             try {
                 const payload = {
-                    agent_type: document.getElementById('selectedAgent').value,
+                    agent_type: agent,
                     name: document.getElementById('nameInput').value,
                     birth_date: document.getElementById('dateInput').value,
                     birth_time: document.getElementById('timeInput').value,
                     country: document.getElementById('countryInput').value,
                     city: document.getElementById('cityInput').value,
-                    question: document.getElementById('queryInput').value,
-                    lang: 'tr'
+                    question: document.getElementById('queryInput').value
                 };
 
                 const res = await fetch('/analyze_astro', {
