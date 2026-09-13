@@ -37,7 +37,6 @@ HTML_DASHBOARD = """
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-10">
-                <!-- Header -->
                 <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
                     <div class="d-flex align-items-center gap-3">
                         <div class="logo-glow">
@@ -54,7 +53,6 @@ HTML_DASHBOARD = """
                     <span class="badge bg-success px-3 py-2">Sistem Canlıda</span>
                 </div>
 
-                <!-- Tab Seçimleri -->
                 <ul class="nav nav-tabs mb-4" id="agentTabs" role="tablist">
                     <li class="nav-item">
                         <button class="nav-link active" id="strategy-tab" data-bs-toggle="tab" data-bs-target="#strategy-panel" type="button">Sosyal Medya & Büyüme</button>
@@ -71,13 +69,12 @@ HTML_DASHBOARD = """
                 </ul>
 
                 <div class="tab-content" id="agentTabsContent">
-                    <!-- MODÜL 1: STRATEJİ VE KREATİF AJANLAR -->
                     <div class="tab-pane fade show active" id="strategy-panel" role="tabpanel">
                         <div class="card p-4 mb-4 shadow">
                             <h5 class="mb-3 text-light">Strateji & Viral Video Senaryo İsteği</h5>
                             <form id="strategyForm">
                                 <div class="mb-3">
-                                    <textarea id="stratQueryInput" class="form-control" rows="3" placeholder="Örn: Mystic Thread Studio için 2026 sosyal medya ve büyüme stratejisi oluştur..." required>Mystic Thread Studio için 2026 sosyal medya ve büyüme stratejisi oluştur.</textarea>
+                                    <textarea id="stratQueryInput" class="form-control" rows="3" required>Mystic Thread Studio için 2026 sosyal medya ve büyüme stratejisi oluştur.</textarea>
                                 </div>
                                 <button type="submit" id="stratSubmitBtn" class="btn btn-primary w-100">
                                     <span id="stratBtnText">Strateji ve Kreatif Ajanları Çalıştır</span>
@@ -87,7 +84,6 @@ HTML_DASHBOARD = """
                         </div>
                     </div>
 
-                    <!-- MODÜL 2: MİSTİK ASTROLOJİ AJANI -->
                     <div class="tab-pane fade" id="astro-panel" role="tabpanel">
                         <div class="card p-4 mb-4 shadow">
                             <h5 class="mb-3 text-light">Doğum Haritası ve Mistik Analiz İsteği</h5>
@@ -101,11 +97,19 @@ HTML_DASHBOARD = """
                                         <label class="form-label text-secondary">Doğum Tarihi</label>
                                         <input type="date" id="dateInput" class="form-control" value="1995-05-15" required>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
                                         <label class="form-label text-secondary">Doğum Saati</label>
                                         <input type="time" id="timeInput" class="form-control" value="14:30" required>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary">Enlem (Lat)</label>
+                                        <input type="number" step="any" id="latInput" class="form-control" value="41.0082" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary">Boylam (Lon)</label>
+                                        <input type="number" step="any" id="lonInput" class="form-control" value="28.9784" required>
+                                    </div>
+                                    <div class="col-12">
                                         <label class="form-label text-secondary">Odaklanılacak Soru / Konu</label>
                                         <input type="text" id="astroQueryInput" class="form-control" value="Kariyer ve potansiyel fırsatlarım yönünde potansiyelim nedir?" required>
                                     </div>
@@ -118,7 +122,6 @@ HTML_DASHBOARD = """
                         </div>
                     </div>
 
-                    <!-- MODÜL 3: TAROT OKUMASI -->
                     <div class="tab-pane fade" id="tarot-panel" role="tabpanel">
                         <div class="card p-4 mb-4 shadow">
                             <h5 class="mb-3 text-light">Tarot Kartı Açılımı & Yorumu</h5>
@@ -149,7 +152,6 @@ HTML_DASHBOARD = """
                         </div>
                     </div>
 
-                    <!-- MODÜL 4: KAHVE FALI (GÖRSEL ANALİZ) -->
                     <div class="tab-pane fade" id="coffee-panel" role="tabpanel">
                         <div class="card p-4 mb-4 shadow">
                             <h5 class="mb-3 text-light">Kahve Fincanı Fotoğrafı ile Fal Yorumu</h5>
@@ -171,9 +173,7 @@ HTML_DASHBOARD = """
                     </div>
                 </div>
 
-                <!-- Sonuç Alanı -->
                 <div id="resultsContainer" class="d-none">
-                    <!-- Strateji Çıktıları -->
                     <div id="stratResultsBlock" class="d-none">
                         <div class="card p-4 mb-4 shadow">
                             <div class="d-flex align-items-center mb-3">
@@ -189,7 +189,6 @@ HTML_DASHBOARD = """
                         </div>
                     </div>
 
-                    <!-- Astroloji Çıktıları -->
                     <div id="astroResultsBlock" class="d-none">
                         <div class="card p-4 mb-4 shadow">
                             <div class="d-flex align-items-center mb-3">
@@ -205,7 +204,6 @@ HTML_DASHBOARD = """
                         </div>
                     </div>
 
-                    <!-- Tarot Çıktısı -->
                     <div id="tarotResultsBlock" class="d-none">
                         <div class="card p-4 mb-4 shadow">
                             <div class="d-flex align-items-center mb-3">
@@ -215,7 +213,6 @@ HTML_DASHBOARD = """
                         </div>
                     </div>
 
-                    <!-- Kahve Falı Çıktısı -->
                     <div id="coffeeResultsBlock" class="d-none">
                         <div class="card p-4 mb-4 shadow">
                             <div class="d-flex align-items-center mb-3">
@@ -231,7 +228,6 @@ HTML_DASHBOARD = """
                         </div>
                     </div>
 
-                    <!-- Ortak Dinamik Görsel Çıktısı -->
                     <div class="card p-4 shadow mb-5">
                         <h5 class="mb-3 text-light">Konsepte Özel Üretilen Görsel</h5>
                         <div class="text-center">
@@ -255,7 +251,6 @@ HTML_DASHBOARD = """
             document.getElementById('coffeeResultsBlock').classList.add('d-none');
         }
 
-        // STRATEJİ
         document.getElementById('strategyForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const query = document.getElementById('stratQueryInput').value;
@@ -298,12 +293,13 @@ HTML_DASHBOARD = """
             }
         });
 
-        // ASTROLOJİ
         document.getElementById('astroForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const name = document.getElementById('nameInput').value;
             const date = document.getElementById('dateInput').value;
             const time = document.getElementById('timeInput').value;
+            const lat = parseFloat(document.getElementById('latInput').value) || 41.0082;
+            const lon = parseFloat(document.getElementById('lonInput').value) || 28.9784;
             const query = document.getElementById('astroQueryInput').value;
 
             const submitBtn = document.getElementById('astroSubmitBtn');
@@ -318,7 +314,7 @@ HTML_DASHBOARD = """
                 const response = await fetch('/analyze_astro', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-API-KEY': 'mistik-secret-key-2026' },
-                    body: JSON.stringify({ name, birth_date: date, birth_time: time, query })
+                    body: JSON.stringify({ name, birth_date: date, birth_time: time, lat, lon, query })
                 });
 
                 if (response.ok) {
@@ -345,7 +341,6 @@ HTML_DASHBOARD = """
             }
         });
 
-        // TAROT
         document.getElementById('tarotForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const c1 = document.getElementById('tarotCard1').value;
@@ -391,7 +386,6 @@ HTML_DASHBOARD = """
             }
         });
 
-        // KAHVE FALI (VISION)
         document.getElementById('coffeeForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const fileInput = document.getElementById('coffeeImgInput');
@@ -454,12 +448,10 @@ HTML_DASHBOARD = """
 def home():
     return render_template_string(HTML_DASHBOARD)
 
-# GERİYE DÖNÜK UYUMLULUK: GELEN VARSAYILAN /analyze İSTEKLERİNİ MISTIK STRATEJİYE YÖNLENDİR
 @app.route("/analyze", methods=["POST"])
 def analyze_default():
     return analyze_strategy()
 
-# ENDPOINT 1: SOSYAL MEDYA & BÜYÜME STRATEJİSİ
 @app.route("/analyze_strategy", methods=["POST"])
 def analyze_strategy():
     client_key = request.headers.get("X-API-KEY")
@@ -534,7 +526,6 @@ def analyze_strategy():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ENDPOINT 2: SWISS EPHEMERIS ASTROLOJİ
 @app.route("/analyze_astro", methods=["POST"])
 def analyze_astro():
     client_key = request.headers.get("X-API-KEY")
@@ -547,6 +538,8 @@ def analyze_astro():
     name = data.get("name", "Danışan")
     birth_date = data.get("birth_date", "1995-05-15")
     birth_time = data.get("birth_time", "14:30")
+    lat = float(data.get("lat", 41.0082))
+    lon = float(data.get("lon", 28.9784))
     user_query = data.get("query", "Genel harita analizi ve potansiyeller.")
 
     try:
@@ -557,7 +550,7 @@ def analyze_astro():
         y, m, d = map(int, birth_date.split("-"))
         h, mn = map(int, birth_time.split(":"))
 
-        natal_chart = astro_engine.calculate_natal_chart(y, m, d, h, mn)
+        natal_chart = astro_engine.calculate_natal_chart(y, m, d, h, mn, lat, lon)
 
         astrolog_agent = Agent(
             role="Kıdemli Mistik Astrolog ve Doğum Haritası Yorumcusu",
@@ -577,7 +570,7 @@ def analyze_astro():
         crew = Crew(agents=[astrolog_agent], tasks=[task_interpretation], process=Process.sequential, verbose=False)
         crew.kickoff()
 
-        prompt_desc = f"astrological natal chart art, {natal_chart['ascendant']['sign']} ascendant, glowing constellation background, 8k"
+        prompt_desc = f"astrological natal chart art, {natal_chart.get('ascendant', {}).get('sign', 'Aries')} ascendant, glowing constellation background, 8k"
         try:
             client = OpenAI(api_key=openai_key)
             img_res = client.images.generate(model="dall-e-3", prompt=prompt_desc, n=1, size="1024x1024")
@@ -595,7 +588,6 @@ def analyze_astro():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ENDPOINT 3: TAROT OKUMASI
 @app.route("/analyze_tarot", methods=["POST"])
 def analyze_tarot():
     client_key = request.headers.get("X-API-KEY")
@@ -648,7 +640,6 @@ def analyze_tarot():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ENDPOINT 4: KAHVE FALI (VISION AI)
 @app.route("/analyze_coffee", methods=["POST"])
 def analyze_coffee():
     client_key = request.headers.get("X-API-KEY")
@@ -671,14 +662,17 @@ def analyze_coffee():
 
         client = OpenAI(api_key=openai_key)
 
-        # 1. GPT-4o Vision ile Sembol Analizi
         vision_response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
+                {
+                    "role": "system",
+                    "content": "Sen kahve falı telve okuma uzmanısın. Görseldeki telve lekelerinden mutlaka en az 3 belirgin sembol (kuş, yol, balık, kalp, anahtar vb.) veya şekil benzetmesi çıkarıp listeleyeceksin."
+                },
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Bu bir kahve fincanı fotoğrafı. Telveden oluşan belirgin şekilleri, hayvan, nesne, yol veya sayı sembollerini tespit et ve kısa bir liste olarak yaz."},
+                        {"type": "text", "text": "Bu kahve fincanı görselindeki telve şekillerinden tespit ettiğin sembolleri (hayvan, nesne, yol, harf vb.) kısa maddeler halinde yaz."},
                         {
                             "type": "image_url",
                             "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
@@ -686,11 +680,10 @@ def analyze_coffee():
                     ]
                 }
             ],
-            max_tokens=200
+            max_tokens=300
         )
         detected_symbols = vision_response.choices[0].message.content
 
-        # 2. CrewAI Kahve Falı Yorumlama Ajanı
         coffee_agent = Agent(
             role="Mistik Kahve Falı Yorumcusu",
             goal="Vision modelinin tespit ettiği telve sembollerini geleneksel kahve falı literatürüyle yorumlamak.",
