@@ -6,26 +6,20 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-import swisseph as swe
 from geopy.geocoders import Nominatim
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
+import swisseph as swe
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="MYSTIC THREAD STUDIO", version="3.6-MULTI-LOCALE")
+app = FastAPI(title="MYSTIC THREAD STUDIO", version="5.1")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-ALLOWED_ORIGINS = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "https://*.railway.app",
-    "https://*.render.com"
-]
-
+# CORS Yapılandırması
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -42,631 +36,322 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-geolocator = Nominatim(user_agent="mystic_thread_studio_v3_6")
+geolocator = Nominatim(user_agent="mystic_thread_studio_v5")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# Gemini Model Entegrasyonu (404 hatasını önlemek için tam model adı kullanımı)
-api_key = os.getenv("GEMINI_API_KEY", "")
-llm = ChatGoogleGenerativeAI(
-    model="models/gemini-1.5-flash",
-    temperature=0.7,
-    google_api_key=api_key
-) if api_key else None
+SIGNS = ["Koç", "Boğa", "İkizler", "Yengeç", "Aslan", "Başak", "Terazi", "Akrep", "Yay", "Oğlak", "Kova", "Balık"]
 
-class AstroRequest(BaseModel):
+def calculate_life_path_number(birth_date_str: str) -> int:
+    """Doğum tarihinden Numerolojik Yaşam Yolu Sayısını hesaplar."""
+    digits = [int(d) for d in re.findall(r"\d", birth_date_str)]
+    total = sum(digits)
+    while total > 9 and total not in [11, 22, 33]:  # Üstat sayıları korur
+        total = sum(int(d) for d in str(total))
+    return total
+
+def get_ai_response(prompt: str) -> str:
+    if not OPENAI_API_KEY:
+        return "<p class='text-danger'>OPENAI_API_KEY tanımlı değil. Lütfen ortam değişkenlerinizi kontrol edin.</p>"
+    try:
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7, openai_api_key=OPENAI_API_KEY)
+        response = llm.invoke(prompt)
+        return response.content if response and response.content else "<p class='text-warning'>Yanıt oluşturulamadı.</p>"
+    except Exception as e:
+        return f"<p class='text-danger'>Yapay Zeka Hatası: {str(e)}</p>"
+
+class AgentRequest(BaseModel):
+    agent_type: str = Field("astro", max_length=20)
     name: Optional[str] = Field("Danışan", max_length=100)
     birth_date: str = Field(..., max_length=15)
-    birth_time: str = Field(..., max_length=10)
+    birth_time: Optional[str] = Field("12:00", max_length=10)
     country: Optional[str] = Field("Türkiye", max_length=60)
-    city: str = Field(..., max_length=60)
+    city: Optional[str] = Field("İstanbul", max_length=60)
     district: Optional[str] = Field("", max_length=60)
-    latitude: Optional[float] = Field(None, ge=-90, le=90)
-    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    latitude: Optional[float] = Field(None)
+    longitude: Optional[float] = Field(None)
     question: Optional[str] = Field("", max_length=500)
     lang: Optional[str] = Field("tr", max_length=5)
 
-def parse_date_by_locale(date_str: str, lang: str):
-    """
-    Farklı dillerdeki tarih formatlarını otomatik çözer:
-    - tr, de, it, es, fr, pt, ru, ar -> GG.AA.YYYY veya GG/AA/YYYY
-    - en -> MM/DD/YYYY
-    - yyyy-mm-dd
-    """
-    clean_str = re.sub(r"[^\d]", " ", date_str).strip()
-    parts = [int(p) for p in clean_str.split() if p.isdigit()]
-    
-    if len(parts) != 3:
-        raise ValueError("Geçersiz tarih formatı")
-
-    p1, p2, p3 = parts
-
-    # Eğer 1. değer 1000'den büyükse: YYYY-MM-DD
-    if p1 > 1000:
-        return p3, p2, p1  # day, month, year
-
-    # EN dili seçildiyse: MM/DD/YYYY
-    if lang == "en":
-        month, day, year = p1, p2, p3
-    else:
-        # TR ve diğer diller: DD.MM.YYYY
-        day, month, year = p1, p2, p3
-
-    return day, month, year
-
 @app.post("/analyze_astro")
 @limiter.limit("10/minute")
-async def analyze_astro(request: Request, req: AstroRequest):
+async def analyze_astro(request: Request, req: AgentRequest):
     try:
-        lat = req.latitude
-        lng = req.longitude
+        if req.agent_type == "astro":
+            lat, lng = req.latitude, req.longitude
+            if lat is None or lng is None:
+                loc = geolocator.geocode(f"{req.city}, {req.country}")
+                lat, lng = (loc.latitude, loc.longitude) if loc else (41.0082, 28.9784)
 
-        if lat is None or lng is None:
-            location_query = f"{req.district}, {req.city}, {req.country}".strip(", ")
-            location = geolocator.geocode(location_query)
-            if location:
-                lat = location.latitude
-                lng = location.longitude
-            else:
-                city_query = f"{req.city}, {req.country}".strip(", ")
-                city_loc = geolocator.geocode(city_query)
-                if city_loc:
-                    lat = city_loc.latitude
-                    lng = city_loc.longitude
-                else:
-                    lat, lng = 41.0082, 28.9784
+            parts = [int(p) for p in re.sub(r"[^\d]", " ", req.birth_date).split() if p.isdigit()]
+            day, month, year = (parts[0], parts[1], parts[2]) if len(parts) == 3 else (15, 5, 1995)
+            
+            clean_time = req.birth_time.replace(".", ":")
+            t_parts = [int(p) for p in clean_time.split(":") if p.isdigit()]
+            hour, minute = (t_parts[0], t_parts[1]) if len(t_parts) >= 2 else (12, 0)
 
-        day, month, year = parse_date_by_locale(req.birth_date, req.lang or "tr")
+            julian_day = swe.julday(year, month, day, hour + (minute / 60.0))
+            cusps, ascmc = swe.houses(julian_day, lat, lng, b'P')
+            ascendant_degree = round(ascmc[0], 2)
+            asc_sign = SIGNS[int(ascendant_degree // 30)]
 
-        clean_time = req.birth_time.replace(".", ":")
-        time_parts = clean_time.split(":")
-        hour, minute = int(time_parts[0]), int(time_parts[1])
+            # Gezegen Konumları Hesaplaması (Swiss Ephemeris)
+            planets_data = []
+            bodies = {
+                "Güneş": swe.SUN,
+                "Ay": swe.MOON,
+                "Merkür": swe.MERCURY,
+                "Venüs": swe.VENUS,
+                "Mars": swe.MARS
+            }
 
-        utc_hour = hour - 3 + (minute / 60.0)
-        julian_day = swe.julday(year, month, day, utc_hour)
+            for name, body_id in bodies.items():
+                res, _ = swe.calc_ut(julian_day, body_id)
+                deg = round(res[0], 2)
+                sign = SIGNS[int(deg // 30)]
+                planets_data.append(f"{name}: {sign} ({deg % 30:.2f}°)")
 
-        planets = {
-            "Güneş": round(swe.calc_ut(julian_day, swe.SUN)[0][0], 2),
-            "Ay": round(swe.calc_ut(julian_day, swe.MOON)[0][0], 2),
-            "Merkür": round(swe.calc_ut(julian_day, swe.MERCURY)[0][0], 2),
-            "Venüs": round(swe.calc_ut(julian_day, swe.VENUS)[0][0], 2),
-            "Mars": round(swe.calc_ut(julian_day, swe.MARS)[0][0], 2),
-            "Jüpiter": round(swe.calc_ut(julian_day, swe.JUPITER)[0][0], 2),
-            "Satürn": round(swe.calc_ut(julian_day, swe.SATURN)[0][0], 2),
-            "Uranüs": round(swe.calc_ut(julian_day, swe.URANUS)[0][0], 2),
-            "Neptün": round(swe.calc_ut(julian_day, swe.NEPTUNE)[0][0], 2),
-            "Plüton": round(swe.calc_ut(julian_day, swe.PLUTO)[0][0], 2),
-        }
+            planets_summary = ", ".join(planets_data)
 
-        houses, ascmc = swe.houses(julian_day, lat, lng, b'P')
-        ascendant_degree = round(ascmc[0], 2)
+            prompt = f"""
+            Sen profesyonel ve bilge bir astrologsun.
+            Danışan Adı: {req.name}
+            Doğum Tarihi/Saati: {req.birth_date} {req.birth_time}
+            Konum: {req.city}, {req.country} (Enlem: {lat}, Boylam: {lng})
+            Yükselen Burç: {asc_sign} ({ascendant_degree}°)
+            Gezegen Konumları: {planets_summary}
+            Soru/Odak Noktası: "{req.question}"
 
-        zodiac_signs = ["Koç", "Boğa", "İkizler", "Yengeç", "Aslan", "Başak", 
-                        "Terazi", "Akrep", "Yay", "Oğlak", "Kova", "Balık"]
-        asc_sign = zodiac_signs[int(ascendant_degree // 30)]
+            Lütfen bu astrolojik harita verilerini temel alarak derinlemesine bir analiz yap.
+            Yanıtı temiz HTML formatında (<h3>, <p>, <ul>, <li>, <strong> etiketleriyle) sun.
+            """
+        
+        elif req.agent_type == "tarot":
+            prompt = f"""
+            Sen sezgisel ve bilge bir Tarot Uzmanısın.
+            Danışan: {req.name}
+            Niyet/Soru: "{req.question}"
+            
+            Danışan için 3 kartlık (Geçmiş, Şu An, Gelecek) sembolik bir açılım yap ve detaylıca yorumla. Yanıtı temiz HTML formatında sun.
+            """
 
-        clean_name = req.name.replace("<", "&lt;").replace(">", "&gt;")
-        clean_question = req.question.replace("<", "&lt;").replace(">", "&gt;")
+        elif req.agent_type == "numerology":
+            life_path = calculate_life_path_number(req.birth_date)
+            prompt = f"""
+            Sen uzman bir Numeroloji Danışmanısın.
+            Danışan: {req.name}
+            Doğum Tarihi: {req.birth_date}
+            Hesaplanan Yaşam Yolu / Kader Sayısı: {life_path}
+            Özel İstek/Soru: "{req.question}"
 
-        prompt = f"""
-        Sen profesyonel, sezgisel ve uzman bir astrolog ve mistik danışmansın.
-        Aşağıdaki Swiss Ephemeris doğum haritası verilerini incele ve danışanın sorusunu detaylıca analiz et.
+            Danışanın Yaşam Yolu Sayısı ({life_path}) üzerinden karakter potansiyelini, güçlü yönlerini ve yaşam döngülerini detaylıca HTML formatında açıkla.
+            """
 
-        DİL REQUIREMENT: Yanıtını tamamen '{req.lang}' dilinde ver.
+        elif req.agent_type == "dream":
+            prompt = f"""
+            Sen bilinçaltı ve rüya sembolleri uzmanısın.
+            Danışan: {req.name}
+            Anlatılan Rüya: "{req.question}"
 
-        DANIŞAN BİLGİLERİ:
-        - İsim: {clean_name}
-        - Yükselen Burç: {ascendant_degree}° {asc_sign}
-        - Gezegen Konumları (Derece): {json.dumps(planets, ensure_ascii=False)}
-        - Danışanın Sorduğu Soru / Odak Alanı: "{clean_question}"
-
-        YAZIM FORMATI:
-        1. "Genel Harita & Potansiyel Özeti": Danışanın yükselen burcu ve genel karakter dinamiklerine kısa bir bakış.
-        2. "Astrolojik Detay ve Sorunun Analizi": Gezegenlerin konumları doğrultusunda danışanın sorusuna derinlemesine yanıt.
-        3. "Mistik Öneri & Tavsiye": Önümüzdeki dönem için somut tavsiyeler.
-
-        Lütfen HTML formatında (<h3>, <p>, <ul>, <li>, <strong> etiketlerini kullanarak) estetik ve okunaklı biçimde yanıt üret.
-        """
-
-        if llm:
-            try:
-                ai_response = llm.invoke(prompt)
-                ai_commentary = ai_response.content
-            except Exception as ai_err:
-                ai_commentary = f"<p class='text-warning'>Yapay zeka yorumu oluşturulamadı: {str(ai_err)}. Lütfen GEMINI_API_KEY anahtarınızı ve model yetkilerini kontrol edin.</p>"
+            Bu rüyadaki ana sembolleri, psikolojik ve mistik katmanları analiz et. Yanıtı HTML formatında düzenli paragraflar halinde ver.
+            """
         else:
-            ai_commentary = "<p class='text-warning'>GEMINI_API_KEY tanımlanmadığı için yapay zeka analizi atlandı.</p>"
+            prompt = f"Danışan {req.name} için genel mistik rehberlik sun: {req.question}"
 
-        analysis_html = f"""
-        <h3>Harita Analizi ({clean_name})</h3>
-        <p><strong>Yükselen / Ascendant:</strong> {ascendant_degree}° {asc_sign}</p>
-        <p><strong>Konum / Location:</strong> {req.district} / {req.city} ({req.country}) - Enlem: {lat}, Boylam: {lng}</p>
-        <hr>
-        <h4>Gezegen Konumları / Planetary Positions:</h4>
-        <ul>
-            {"".join([f"<li><strong>{planet}:</strong> {deg}°</li>" for planet, deg in planets.items()])}
-        </ul>
-        <hr>
-        <div class="ai-interpretation mt-3">
-            {ai_commentary}
-        </div>
-        """
+        ai_commentary = get_ai_response(prompt)
+        return {"status": "success", "analysis": ai_commentary}
 
-        return {
-            "status": "success",
-            "name": clean_name,
-            "ascendant": f"{ascendant_degree}° {asc_sign}",
-            "coordinates": {"lat": lat, "lng": lng},
-            "planets": planets,
-            "analysis": analysis_html
-        }
-
-    except ValueError as ve:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Tarih veya Saat formatı hatalı: {str(ve)}"
-        )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Hesaplama hatası: {str(e)}"
-        )
-
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
-    html_content = """
+    return r"""
     <!DOCTYPE html>
     <html lang="tr">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>MYSTIC THREAD STUDIO</title>
+        <title>MYSTIC THREAD STUDIO - Holding Konsolu</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
             body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-            .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; color: #f8fafc; }
-            .form-control, .form-select { background-color: #0f172a; border: 1px solid #334155; color: #f8fafc; }
-            .form-control:focus, .form-select:focus { background-color: #0f172a; color: #fff; border-color: #6366f1; box-shadow: none; }
-            .btn-primary { background-color: #6366f1; border: none; font-weight: 600; padding: 12px; }
+            .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; }
+            .agent-card { cursor: pointer; border: 2px solid #334155; transition: all 0.3s ease; }
+            .agent-card:hover { border-color: #6366f1; transform: translateY(-2px); }
+            .agent-card.active { border-color: #6366f1; background-color: #334155; box-shadow: 0 0 15px rgba(99, 102, 241, 0.3); }
+            .form-control, .form-select { background-color: #0f172a; border: 1px solid #334155; color: #fff; }
+            .form-control:focus { background-color: #0f172a; color: #fff; border-color: #6366f1; box-shadow: none; }
+            .btn-primary { background-color: #6366f1; border: none; font-weight: 600; }
             .btn-primary:hover { background-color: #4f46e5; }
-            
-            .autocomplete-wrapper { position: relative; }
-            .autocomplete-results {
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                z-index: 1000;
-                background-color: #1e293b;
-                border: 1px solid #6366f1;
-                border-top: none;
-                max-height: 200px;
-                overflow-y: auto;
-                border-bottom-left-radius: 8px;
-                border-bottom-right-radius: 8px;
-            }
-            .autocomplete-item {
-                padding: 8px 12px;
-                cursor: pointer;
-                color: #f8fafc;
-                font-size: 0.9rem;
-            }
-            .autocomplete-item:hover {
-                background-color: #6366f1;
-            }
         </style>
     </head>
     <body class="container py-4">
-
+        
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h2 class="fw-bold text-indigo">✨ MYSTIC THREAD STUDIO</h2>
-                <p class="text-muted mb-0" id="subTitle">Holding Otonom Ajan Konsolu</p>
+                <h2 class="fw-bold text-indigo mb-0">✨ MYSTIC THREAD STUDIO</h2>
+                <small class="text-muted">Holding Otonom Mistik Ajan Konsolu</small>
             </div>
-            <div class="d-flex align-items-center gap-2">
-                <select id="langSelect" class="form-select form-select-sm" onchange="changeLanguage()">
-                    <option value="tr" selected>Türkçe</option>
-                    <option value="en">English</option>
-                    <option value="de">Deutsch</option>
-                    <option value="it">Italiano</option>
-                    <option value="es">Español</option>
-                    <option value="fr">Français</option>
-                    <option value="pt">Português</option>
-                    <option value="ru">Русский</option>
-                    <option value="ar">العربية</option>
-                </select>
-                <span class="badge bg-success px-3 py-2">SECURE ONLINE</span>
+            <span class="badge bg-success px-3 py-2">SYSTEM ONLINE</span>
+        </div>
+
+        <!-- AJAN SEÇİM ALANI -->
+        <h6 class="mb-3 text-muted">Aktif Çalıştırılacak Ajanı Seçin:</h6>
+        <div class="row mb-4">
+            <div class="col-md-3 mb-2">
+                <div class="card p-3 agent-card active" onclick="selectAgent('astro', this)">
+                    <h6 class="fw-bold mb-1">🪐 Astroloji Ajanı</h6>
+                    <small class="text-muted">Doğum Haritası & Transitler</small>
+                </div>
+            </div>
+            <div class="col-md-3 mb-2">
+                <div class="card p-3 agent-card" onclick="selectAgent('tarot', this)">
+                    <h6 class="fw-bold mb-1">🃏 Tarot Ajanı</h6>
+                    <small class="text-muted">Kart Okuma & Kehanet</small>
+                </div>
+            </div>
+            <div class="col-md-3 mb-2">
+                <div class="card p-3 agent-card" onclick="selectAgent('numerology', this)">
+                    <h6 class="fw-bold mb-1">🔢 Numeroloji Ajanı</h6>
+                    <small class="text-muted">Kader Sayısı & Analiz</small>
+                </div>
+            </div>
+            <div class="col-md-3 mb-2">
+                <div class="card p-3 agent-card" onclick="selectAgent('dream', this)">
+                    <h6 class="fw-bold mb-1">🌙 Rüya Ajanı</h6>
+                    <small class="text-muted">Bilinçaltı & Semboller</small>
+                </div>
             </div>
         </div>
 
+        <!-- FORM ALANI -->
         <div class="card p-4">
             <h4 class="mb-4" id="formTitle">Doğum Haritası ve Mistik Analiz İsteği</h4>
-            
-            <form id="astroForm" onsubmit="handleAstroSubmit(event)">
+            <form onsubmit="handleFormSubmit(event)">
+                <input type="hidden" id="selectedAgent" value="astro">
+                
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <label class="form-label" id="lblTitle">Ad Soyad / Danışan</label>
-                        <input type="text" id="astroNameInput" class="form-control" value="Danışan" required>
+                        <label class="form-label">Ad Soyad / Danışan</label>
+                        <input type="text" id="nameInput" class="form-control" value="Danışan" required>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label" id="lblDate">Doğum Tarihi</label>
-                        <input type="text" id="astroDateInput" class="form-control" value="15.05.1995" placeholder="GG.AA.YYYY" maxlength="10" oninput="formatDateInput(this)" required>
+                        <label class="form-label">Doğum Tarihi</label>
+                        <input type="text" id="dateInput" class="form-control" value="15.05.1995" placeholder="GG.AA.YYYY" required>
                     </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label" id="lblTime">Doğum Saati</label>
-                        <input type="text" id="astroTimeInput" class="form-control" value="14:30" placeholder="HH:MM" maxlength="5" oninput="formatTimeInput(this)" required>
+                    <div class="col-md-4 mb-3" id="timeGroup">
+                        <label class="form-label">Doğum Saati</label>
+                        <input type="text" id="timeInput" class="form-control" value="14:30" placeholder="HH:MM">
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-md-4 mb-3 autocomplete-wrapper">
-                        <label class="form-label" id="lblCountry">Doğum Ülkesi</label>
-                        <input type="text" id="astroCountryInput" class="form-control" value="Türkiye" required>
-                    </div>
-                    <div class="col-md-4 mb-3 autocomplete-wrapper">
-                        <label class="form-label" id="lblCity">Doğum İli (Şehir)</label>
-                        <input type="text" id="astroCityInput" class="form-control" value="İstanbul" oninput="searchLocation('city')" autocomplete="off" required>
-                        <div id="cityResults" class="autocomplete-results d-none"></div>
-                    </div>
-                    <div class="col-md-4 mb-3 autocomplete-wrapper">
-                        <label class="form-label" id="lblDistrict">Doğum İlçesi</label>
-                        <input type="text" id="astroDistrictInput" class="form-control" value="Kadıköy" oninput="searchLocation('district')" autocomplete="off" required>
-                        <div id="districtResults" class="autocomplete-results d-none"></div>
-                    </div>
-                </div>
-
-                <div class="row">
+                <div class="row" id="locationGroup">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label" id="lblLat">Enlem (Otomatik)</label>
-                        <input type="text" id="astroLatInput" class="form-control">
+                        <label class="form-label">Doğum Ülkesi</label>
+                        <input type="text" id="countryInput" class="form-control" value="Türkiye">
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label" id="lblLng">Boylam (Otomatik)</label>
-                        <input type="text" id="astroLngInput" class="form-control">
+                        <label class="form-label">Doğum Şehri</label>
+                        <input type="text" id="cityInput" class="form-control" value="İstanbul">
                     </div>
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label" id="lblQuery">Odaklanılacak Soru / Konu</label>
-                    <textarea id="astroQueryInput" class="form-control" rows="3">Kariyer ve potansiyel fırsatlarım yönünde potansiyelim nedir?</textarea>
+                    <label class="form-label" id="queryLabel">Odaklanılacak Soru / Konu</label>
+                    <textarea id="queryInput" class="form-control" rows="3">Kariyer ve potansiyel fırsatlarım yönünde potansiyelim nedir?</textarea>
                 </div>
 
-                <button type="submit" id="astroSubmitBtn" class="btn btn-primary w-100">
-                    <span id="astroBtnText">Swiss Ephemeris Haritasını Çıkar ve Yapay Zekaya Yorumlat</span>
-                    <span id="astroBtnSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold">
+                    <span id="btnText">Ajan Analizini Başlat</span>
+                    <span id="btnSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                 </button>
             </form>
 
             <div id="resultCard" class="mt-4 p-3 rounded d-none" style="background-color: #0f172a; border: 1px solid #334155;">
-                <h5 class="text-indigo" id="resultTitle">Analiz Sonucu</h5>
-                <div id="astroResultBox"></div>
+                <h5 class="text-indigo mb-3">Analiz Sonucu</h5>
+                <div id="resultBox"></div>
             </div>
         </div>
 
         <script>
-        // DİLE GÖRE DİNAMİK DOKUNMATİK MASKELER VE DİL LİSTESİ
-        const i18n = {
-            tr: {
-                subTitle: "Holding Otonom Ajan Konsolu",
-                formTitle: "Doğum Haritası ve Mistik Analiz İsteği",
-                lblTitle: "Ad Soyad / Danışan",
-                lblDate: "Doğum Tarihi",
-                lblTime: "Doğum Saati",
-                lblCountry: "Doğum Ülkesi",
-                lblCity: "Doğum İli (Şehir)",
-                lblDistrict: "Doğum İlçesi",
-                lblLat: "Enlem (Otomatik)",
-                lblLng: "Boylam (Otomatik)",
-                lblQuery: "Odaklanılacak Soru / Konu",
-                btnText: "Swiss Ephemeris Haritasını Çıkar ve Yapay Zekaya Yorumlat",
-                resultTitle: "Analiz Sonucu",
-                datePlaceholder: "GG.AA.YYYY",
-                dateMask: "DD.MM.YYYY"
-            },
-            en: {
-                subTitle: "Holding Autonomous Agent Console",
-                formTitle: "Birth Chart & Mystic Analysis Request",
-                lblTitle: "Full Name / Client",
-                lblDate: "Date of Birth",
-                lblTime: "Time of Birth",
-                lblCountry: "Country of Birth",
-                lblCity: "City of Birth",
-                lblDistrict: "District of Birth",
-                lblLat: "Latitude (Auto)",
-                lblLng: "Longitude (Auto)",
-                lblQuery: "Question / Focus Area",
-                btnText: "Generate Swiss Ephemeris Chart & AI Analysis",
-                resultTitle: "Analysis Result",
-                datePlaceholder: "MM/DD/YYYY",
-                dateMask: "MM/DD/YYYY"
-            },
-            de: {
-                subTitle: "Holding Autonomes Agenten-Konsol",
-                formTitle: "Geburtshoroskop & Mystische Analyse",
-                lblTitle: "Vollständiger Name / Kunde",
-                lblDate: "Geburtsdatum",
-                lblTime: "Geburtszeit",
-                lblCountry: "Geburtsland",
-                lblCity: "Geburtsstadt",
-                lblDistrict: "Bezirk",
-                lblLat: "Breitengrad (Auto)",
-                lblLng: "Längengrad (Auto)",
-                lblQuery: "Frage / Fokusbereich",
-                btnText: "Swiss Ephemeris Horoskop & KI-Analyse Erstellen",
-                resultTitle: "Analyse-Ergebnis",
-                datePlaceholder: "TT.MM.JJJJ",
-                dateMask: "DD.MM.YYYY"
-            },
-            it: {
-                subTitle: "Console Agente Autonomo Holding",
-                formTitle: "Tema Natale e Analisi Mistica",
-                lblTitle: "Nome e Cognome / Cliente",
-                lblDate: "Data di Nascita",
-                lblTime: "Ora di Nascita",
-                lblCountry: "Paese di Nascita",
-                lblCity: "Città di Nascita",
-                lblDistrict: "Quartiere / Distretto",
-                lblLat: "Latitudine (Auto)",
-                lblLng: "Longitudine (Auto)",
-                lblQuery: "Domanda / Area di Focus",
-                btnText: "Genera Carta Swiss Ephemeris e Analisi IA",
-                resultTitle: "Risultato dell'Analisi",
-                datePlaceholder: "GG/MM/AAAA",
-                dateMask: "DD/MM/YYYY"
-            },
-            es: {
-                subTitle: "Consola de Agente Autónomo",
-                formTitle: "Carta Natal y Análisis Místico",
-                lblTitle: "Nombre Completo / Cliente",
-                lblDate: "Fecha de Nacimiento",
-                lblTime: "Hora de Nacimiento",
-                lblCountry: "País de Nacimiento",
-                lblCity: "Ciudad de Nacimiento",
-                lblDistrict: "Distrito",
-                lblLat: "Latitud (Auto)",
-                lblLng: "Longitud (Auto)",
-                lblQuery: "Pregunta / Área de Enfoque",
-                btnText: "Generar Carta Swiss Ephemeris y Análisis IA",
-                resultTitle: "Resultado del Análisis",
-                datePlaceholder: "DD/MM/AAAA",
-                dateMask: "DD/MM/YYYY"
-            },
-            fr: {
-                subTitle: "Console d'Agent Autonome",
-                formTitle: "Thème Astral & Analyse Mystique",
-                lblTitle: "Nom Complet / Client",
-                lblDate: "Date de Naissance",
-                lblTime: "Heure de Naissance",
-                lblCountry: "Pays de Naissance",
-                lblCity: "Ville de Naissance",
-                lblDistrict: "District",
-                lblLat: "Latitude (Auto)",
-                lblLng: "Longitude (Auto)",
-                lblQuery: "Question / Domaine d'Intérêt",
-                btnText: "Générer la Carte Swiss Ephemeris & Analyse IA",
-                resultTitle: "Résultat de l'Analyse",
-                datePlaceholder: "JJ/MM/AAAA",
-                dateMask: "DD/MM/YYYY"
-            },
-            pt: {
-                subTitle: "Consola de Agente Autónomo",
-                formTitle: "Mapa Astral e Análise Mística",
-                lblTitle: "Nome Completo / Cliente",
-                lblDate: "Data de Nascimento",
-                lblTime: "Hora de Nascimento",
-                lblCountry: "País de Nascimento",
-                lblCity: "Cidade de Nascimento",
-                lblDistrict: "Distrito",
-                lblLat: "Latitude (Auto)",
-                lblLng: "Longitude (Auto)",
-                lblQuery: "Pergunta / Área de Foco",
-                btnText: "Gerar Mapa Swiss Ephemeris e Análise IA",
-                resultTitle: "Resultado da Análise",
-                datePlaceholder: "DD/MM/AAAA",
-                dateMask: "DD/MM/YYYY"
-            },
-            ru: {
-                subTitle: "Консоль Автономного Агента",
-                formTitle: "Натальная Карта и Мистический Анализ",
-                lblTitle: "ФИО / Клиент",
-                lblDate: "Дата Рождения",
-                lblTime: "Время Рождения",
-                lblCountry: "Страна Рождения",
-                lblCity: "Город Рождения",
-                lblDistrict: "Район",
-                lblLat: "Широта (Авто)",
-                lblLng: "Долгота (Авто)",
-                lblQuery: "Вопрос / Область Фокуса",
-                btnText: "Рассчитать Карту Swiss Ephemeris и ИИ Анализ",
-                resultTitle: "Результат Анализа",
-                datePlaceholder: "ДД.ММ.ГГГГ",
-                dateMask: "DD.MM.YYYY"
-            },
-            ar: {
-                subTitle: "لوحة التحكم للوكيل المستقل",
-                formTitle: "خريطة المولد والتحليل الفلكي",
-                lblTitle: "الاسم الكامل / العميل",
-                lblDate: "تاريخ الميلاد",
-                lblTime: "وقت الميلاد",
-                lblCountry: "بلد الميلاد",
-                lblCity: "مدينة الميلاد",
-                lblDistrict: "المنطقة / الحي",
-                lblLat: "خط العرض (تلقائي)",
-                lblLng: "خط الطول (تلقائي)",
-                lblQuery: "السؤال / مجال التركيز",
-                btnText: "استخراج خريطة Swiss Ephemeris والتحليل بالذكاء الاصطناعي",
-                resultTitle: "نتيجة التحليل",
-                datePlaceholder: "DD/MM/YYYY",
-                dateMask: "DD/MM/YYYY"
-            }
-        };
+        function selectAgent(type, el) {
+            document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('selectedAgent').value = type;
 
-        function formatDateInput(input) {
-            const lang = document.getElementById("langSelect").value;
-            const maskType = i18n[lang]?.dateMask || "DD.MM.YYYY";
-            let v = input.value.replace(/\D/g, '');
-            if (v.length > 8) v = v.substring(0, 8);
+            const title = document.getElementById('formTitle');
+            const timeGrp = document.getElementById('timeGroup');
+            const locGrp = document.getElementById('locationGroup');
+            const qLbl = document.getElementById('queryLabel');
 
-            const sep = maskType.includes('/') ? '/' : '.';
-
-            if (v.length > 4) {
-                input.value = v.substring(0, 2) + sep + v.substring(2, 4) + sep + v.substring(4);
-            } else if (v.length > 2) {
-                input.value = v.substring(0, 2) + sep + v.substring(2);
-            } else {
-                input.value = v;
+            if (type === 'astro') {
+                title.innerText = "Doğum Haritası ve Mistik Analiz İsteği";
+                timeGrp.style.display = "block";
+                locGrp.style.display = "flex";
+                qLbl.innerText = "Odaklanılacak Soru / Konu";
+            } else if (type === 'tarot') {
+                title.innerText = "Tarot Kart Açılımı ve Gelecek Analizi";
+                timeGrp.style.display = "none";
+                locGrp.style.display = "none";
+                qLbl.innerText = "Niyetiniz veya Öğrenmek İstediğiniz Konu";
+            } else if (type === 'numerology') {
+                title.innerText = "Numeroloji & Kader Sayısı Analizi";
+                timeGrp.style.display = "none";
+                locGrp.style.display = "none";
+                qLbl.innerText = "Özel İsteğiniz Varsa Belirtin (Opsiyonel)";
+            } else if (type === 'dream') {
+                title.innerText = "Rüya Tabiri ve Sembol Okumaları";
+                timeGrp.style.display = "none";
+                locGrp.style.display = "none";
+                qLbl.innerText = "Gördüğünüz Rüyayı Detaylıca Yazın";
             }
         }
 
-        function formatTimeInput(input) {
-            let v = input.value.replace(/\D/g, '');
-            if (v.length > 4) v = v.substring(0, 4);
-            
-            if (v.length > 2) {
-                input.value = v.substring(0, 2) + ':' + v.substring(2);
-            } else {
-                input.value = v;
-            }
-        }
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
+            const btnSpinner = document.getElementById('btnSpinner');
+            const btnText = document.getElementById('btnText');
+            const resultCard = document.getElementById('resultCard');
+            const resultBox = document.getElementById('resultBox');
 
-        function changeLanguage() {
-            const lang = document.getElementById("langSelect").value;
-            const dict = i18n[lang] || i18n["en"];
-            
-            for (const key in dict) {
-                const el = document.getElementById(key);
-                if (el) el.innerText = dict[key];
-            }
-
-            const dateInput = document.getElementById("astroDateInput");
-            if (dateInput && dict.datePlaceholder) {
-                dateInput.placeholder = dict.datePlaceholder;
-            }
-        }
-
-        let debounceTimer;
-        function searchLocation(type) {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(async () => {
-                const country = document.getElementById("astroCountryInput")?.value.trim() || "Türkiye";
-                const cityInput = document.getElementById("astroCityInput");
-                const districtInput = document.getElementById("astroDistrictInput");
-                const resultsDiv = document.getElementById(type === 'city' ? "cityResults" : "districtResults");
-
-                let query = "";
-                if (type === 'city') {
-                    if (cityInput.value.length < 2) { resultsDiv.classList.add("d-none"); return; }
-                    query = `${cityInput.value}, ${country}`;
-                } else {
-                    if (districtInput.value.length < 2) { resultsDiv.classList.add("d-none"); return; }
-                    query = `${districtInput.value}, ${cityInput.value}, ${country}`;
-                }
-
-                try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
-                    const data = await res.json();
-
-                    if (data && data.length > 0) {
-                        resultsDiv.innerHTML = "";
-                        resultsDiv.classList.remove("d-none");
-
-                        data.forEach(item => {
-                            const div = document.createElement("div");
-                            div.className = "autocomplete-item";
-                            div.innerText = item.display_name;
-                            div.onclick = () => {
-                                if (type === 'city') {
-                                    cityInput.value = item.display_name.split(",")[0];
-                                } else {
-                                    districtInput.value = item.display_name.split(",")[0];
-                                }
-                                document.getElementById("astroLatInput").value = parseFloat(item.lat).toFixed(4);
-                                document.getElementById("astroLngInput").value = parseFloat(item.lon).toFixed(4);
-                                resultsDiv.classList.add("d-none");
-                            };
-                            resultsDiv.appendChild(div);
-                        });
-                    } else {
-                        resultsDiv.classList.add("d-none");
-                    }
-                } catch (e) {
-                    console.error(e);
-                }
-            }, 300);
-        }
-
-        document.addEventListener("click", function (e) {
-            if (!e.target.closest(".autocomplete-wrapper")) {
-                document.getElementById("cityResults")?.classList.add("d-none");
-                document.getElementById("districtResults")?.classList.add("d-none");
-            }
-        });
-
-        async function handleAstroSubmit(event) {
-            if (event) event.preventDefault();
-
-            const btnSpinner = document.getElementById("astroBtnSpinner");
-            const submitBtn = document.getElementById("astroSubmitBtn");
-            const resultCard = document.getElementById("resultCard");
-            const resultBox = document.getElementById("astroResultBox");
-
-            if (submitBtn) submitBtn.disabled = true;
-            if (btnSpinner) btnSpinner.classList.remove("d-none");
+            submitBtn.disabled = true;
+            btnSpinner.classList.remove('d-none');
+            btnText.innerText = "Ajan Hesaplanıyor...";
 
             try {
-                const country = document.getElementById("astroCountryInput")?.value.trim() || "Türkiye";
-                const city = document.getElementById("astroCityInput")?.value.trim() || "";
-                const district = document.getElementById("astroDistrictInput")?.value.trim() || "";
-                
-                let latVal = document.getElementById("astroLatInput")?.value.trim();
-                let lngVal = document.getElementById("astroLngInput")?.value.trim();
-
-                let lat = latVal ? parseFloat(latVal.replace(",", ".")) : null;
-                let lng = lngVal ? parseFloat(lngVal.replace(",", ".")) : null;
-
                 const payload = {
-                    name: document.getElementById("astroNameInput")?.value || "Danışan",
-                    birth_date: document.getElementById("astroDateInput")?.value || "",
-                    birth_time: document.getElementById("astroTimeInput")?.value || "",
-                    country: country,
-                    city: city,
-                    district: district,
-                    latitude: lat,
-                    longitude: lng,
-                    question: document.getElementById("astroQueryInput")?.value || "",
-                    lang: document.getElementById("langSelect").value
+                    agent_type: document.getElementById('selectedAgent').value,
+                    name: document.getElementById('nameInput').value,
+                    birth_date: document.getElementById('dateInput').value,
+                    birth_time: document.getElementById('timeInput').value,
+                    country: document.getElementById('countryInput').value,
+                    city: document.getElementById('cityInput').value,
+                    question: document.getElementById('queryInput').value,
+                    lang: 'tr'
                 };
 
-                const response = await fetch("/analyze_astro", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                const res = await fetch('/analyze_astro', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
-                const data = await response.json();
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Sunucu hatası oluştu.");
 
-                if (response.status === 429) {
-                    throw new Error("Çok fazla istek gönderdiniz. Lütfen 1 dakika bekleyip tekrar deneyin.");
-                }
-
-                if (!response.ok) {
-                    throw new Error(data.detail || `Sunucu Hatası: ${response.status}`);
-                }
-                
-                if (resultCard && resultBox) {
-                    resultCard.classList.remove("d-none");
-                    resultBox.innerHTML = data.analysis;
-                }
+                resultCard.classList.remove('d-none');
+                resultBox.innerHTML = data.analysis;
 
             } catch (err) {
-                console.error("Astro Error:", err);
                 alert("Hata: " + err.message);
             } finally {
-                if (submitBtn) submitBtn.disabled = false;
-                if (btnSpinner) btnSpinner.classList.add("d-none");
+                submitBtn.disabled = false;
+                btnSpinner.classList.add('d-none');
+                btnText.innerText = "Ajan Analizini Başlat";
             }
         }
         </script>
     </body>
     </html>
     """
-    return HTMLResponse(content=html_content)
